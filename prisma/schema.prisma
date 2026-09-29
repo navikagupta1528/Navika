@@ -1,0 +1,445 @@
+// Navika — Smart College/School Bus Management & Tracking System
+// Prisma 7 conventions: datasource url lives in prisma7.config.ts, not here.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  STUDENT
+  PARENT
+  DRIVER
+  ADMIN
+}
+
+enum BusStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum TripDirection {
+  PICKUP
+  DROPOFF
+}
+
+enum TripStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum PickupStatus {
+  PENDING // row exists (created when trip starts), student has not acted yet
+  WAITING // student pressed "I'm waiting"
+  PICKED // driver checked them off
+  MISSED // marked waiting, bus left, never picked up
+  ABSENT // student never marked waiting
+}
+
+enum AlertType {
+  EMERGENCY
+  BREAKDOWN
+  ACCIDENT
+  DELAY
+  OTHER
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum NotificationType {
+  BUS_NEARBY
+  PICKED_UP
+  NO_SHOW
+  DELAY
+  EMERGENCY
+  INFO
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role     @default(STUDENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studentProfile StudentProfile?
+  parentProfile  ParentProfile?
+  driverProfile  DriverProfile?
+
+  // A driver can be rotated across buses over time
+  busAssignments BusDriver[]
+
+  // Trips this user is driving
+  drivenTrips Trip[] @relation("TripDriver")
+
+  // Alerts this user raised / resolved
+  raisedAlerts   EmergencyAlert[] @relation("AlertRaisedBy")
+  resolvedAlerts EmergencyAlert[] @relation("AlertResolvedBy")
+
+  notifications Notification[]
+
+  @@index([role])
+}
+
+model StudentProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollmentNo  String   @unique
+  department    String?
+  yearOfStudy   Int?
+  guardianName  String?
+
+  enrollments Enrollment[]
+  pickupRecords PickupRecord[]
+  guardians    ParentChild[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A parent may watch one or more children.
+model ParentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  relation String // MOTHER | FATHER | GUARDIAN
+
+  children ParentChild[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Join: parent <-> student. A student can have several guardians.
+model ParentChild {
+  id        String        @id @default(cuid())
+  parentId  String
+  parent    ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+}
+
+model DriverProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenseNo     String   @unique
+  licenseExpiry DateTime?
+  experienceYr  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Geography: Stop + Route + RouteStop join
+// ---------------------------------------------------------------------------
+
+model Stop {
+  id      String @id @default(cuid())
+  name    String
+  address String?
+  lat     Float
+  lng     Float
+  isActive Boolean @default(true)
+
+  routeStops  RouteStop[]
+  enrollments Enrollment[]
+  stopEvents  StopEvent[]
+  pickupRecords PickupRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  routeStops RouteStop[]
+  trips      Trip[]
+  buses      Bus[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// WHY A JOIN TABLE AND NOT `Stop.order`:
+/// One stop can sit on several routes, and its position differs per route
+/// (Sector 15 is stop 2 on Route A but stop 5 on Route B). The order therefore
+/// belongs to the (route, stop) pair — not to the stop itself.
+model RouteStop {
+  id      String @id @default(cuid())
+  routeId String
+  route   Route  @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  stopId  String
+  stop    Stop   @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  stopOrder    Int // 1-based position on THIS route
+  offsetMeters Int? // cumulative distance from route start, for ETA
+  scheduledHHMM String? // e.g. "07:30" for the pickup run
+
+  stopEvents StopEvent[]
+
+  @@unique([routeId, stopId])
+  @@unique([routeId, stopOrder])
+  @@index([stopId])
+}
+
+// ---------------------------------------------------------------------------
+// Fleet
+// ---------------------------------------------------------------------------
+
+model Bus {
+  id             String     @id @default(cuid())
+  busNumber      String     @unique
+  registrationNo String     @unique
+  capacity       Int        @default(40)
+  model          String?
+  status         BusStatus  @default(ACTIVE)
+
+  routeId String?
+  route   Route? @relation(fields: [routeId], references: [id], onDelete: SetNull)
+
+  // Last known position. Written frequently during a trip, so it lives on the
+  // bus rather than in a separate table to keep the read cheap.
+  currentLat        Float?
+  currentLng        Float?
+  headingDeg        Float?
+  speedKph          Float?
+  lastLocationAt    DateTime?
+  onboardCount      Int        @default(0)
+  isSimulated       Boolean    @default(false)
+
+  busAssignments BusDriver[]
+  enrollments    Enrollment[]
+  trips          Trip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+/// Driver <-> Bus over time. Not a column on Bus, because drivers rotate and we
+/// need to know who drove which bus on which date.
+model BusDriver {
+  id      String @id @default(cuid())
+  busId   String
+  bus     Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  validFrom DateTime  @default(now())
+  validTo   DateTime?
+  isPrimary Boolean   @default(true)
+
+  @@unique([busId, driverId, validFrom])
+  @@index([driverId])
+}
+
+// ---------------------------------------------------------------------------
+// Enrollment: the student -> bus -> stop assignment
+// ---------------------------------------------------------------------------
+
+/// This is an explicit table, not two nullable columns on User, because the
+/// assignment is per direction (home->college vs college->home) and per
+/// academic year, and history must be retained across years.
+model Enrollment {
+  id          String        @id @default(cuid())
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  busId       String
+  bus         Bus           @relation(fields: [busId], references: [id], onDelete: Cascade)
+  stopId      String
+  stop        Stop          @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  direction   Direction
+  academicYear String // e.g. "2026-27"
+
+  isActive Boolean @default(true)
+
+  pickupRecords PickupRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, busId, stopId, direction, academicYear])
+  @@index([busId, stopId, direction])
+  @@index([studentId])
+}
+
+enum Direction {
+  PICKUP // home -> institution
+  DROPOFF // institution -> home
+}
+
+// ---------------------------------------------------------------------------
+// Operations: Trip + StopEvent + PickupRecord
+// ---------------------------------------------------------------------------
+
+/// One row per bus, per date, per direction. The spine of attendance history.
+model Trip {
+  id        String         @id @default(cuid())
+  busId     String
+  bus       Bus            @relation(fields: [busId], references: [id], onDelete: Cascade)
+  routeId   String
+  route     Route          @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  driverId  String
+  driver    User           @relation("TripDriver", fields: [driverId], references: [id], onDelete: Cascade)
+
+  date       DateTime       @db.Date
+  direction  TripDirection
+  status     TripStatus     @default(SCHEDULED)
+
+  scheduledStart DateTime
+  startedAt      DateTime?
+  endedAt        DateTime?
+  delaySeconds   Int?
+
+  stopEvents   StopEvent[]
+  pickupRecords PickupRecord[]
+  alerts        EmergencyAlert[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([busId, date, direction])
+  @@index([date, status])
+}
+
+/// Actual arrival at a stop, with the delay it caused. Powers "bus is late".
+model StopEvent {
+  id          String    @id @default(cuid())
+  tripId      String
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  stopId      String
+  stop        Stop      @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  routeStopId String?
+  routeStop   RouteStop? @relation(fields: [routeStopId], references: [id], onDelete: SetNull)
+
+  arrivedAt   DateTime?
+  departedAt  DateTime?
+  delaySeconds Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tripId, stopId])
+  @@index([tripId])
+}
+
+/// THE differentiator table: per student, per trip, per stop.
+/// This is what makes Navika "student-aware" rather than just a map with a dot.
+model PickupRecord {
+  id         String        @id @default(cuid())
+  tripId     String
+  trip       Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stopId     String
+  stop       Stop          @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  enrollmentId String?
+  enrollment Enrollment?   @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+
+  status PickupStatus @default(PENDING)
+
+  waitingMarkedAt DateTime?
+  pickedAt        DateTime?
+  cancelledAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tripId, studentId, stopId])
+  @@index([tripId, status])
+  @@index([stopId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Alerts + Notifications
+// ---------------------------------------------------------------------------
+
+model EmergencyAlert {
+  id       String      @id @default(cuid())
+  tripId   String?
+  trip     Trip?       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  busId    String
+  type     AlertType   @default(EMERGENCY)
+  message  String
+  lat      Float?
+  lng      Float?
+  status   AlertStatus @default(OPEN)
+
+  raisedById String
+  raisedBy   User   @relation("AlertRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+
+  resolvedById String?
+  resolvedBy   User?  @relation("AlertResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([busId])
+}
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType @default(INFO)
+  title  String
+  body   String
+  data   Json?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+/// Server-side cache of route durations from OSRM so we stay inside the
+/// public API's rate limit.
+model EtaCache {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique
+  seconds    Int
+  meters     Int?
+  source     String // "osrm" | "haversine"
+  computedAt DateTime @default(now())
+}

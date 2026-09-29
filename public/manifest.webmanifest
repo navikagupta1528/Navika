@@ -1,0 +1,29 @@
+{
+  "name": "Navika — Smart Bus Tracking",
+  "short_name": "Navika",
+  "description": "Live bus location, ETA and pickup tracking for college and school transport.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "My bus", "url": "/student" },
+    { "name": "Driver panel", "url": "/driver" },
+    { "name": "Admin", "url": "/admin" }
+  ]
+}
