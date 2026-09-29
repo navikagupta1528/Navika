@@ -42,4 +42,12 @@ yarn-error.log*
 !.vscode/extensions.json
 .idea
 
+# agent tooling installed into the project, not part of the app
+# AGENTS.md is intentionally tracked: `next dev` regenerates it.
+/.agents
+/.claude
+/.windsurf
+/skills-lock.json
+/CLAUDE.md
+
 

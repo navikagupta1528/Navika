@@ -1,0 +1,13 @@
+# Normalise to LF in the repository; Windows checkouts get CRLF.
+# Keeps diffs clean and avoids "LF will be replaced by CRLF" warnings on
+# every add.
+* text=auto eol=lf
+
+# Binary assets that must not be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
