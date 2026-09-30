@@ -12,7 +12,7 @@ import "dotenv/config";
 import { io } from "socket.io-client";
 import { SignJWT } from "jose";
 
-const port = Number.parseInt(process.argv[2] ?? "3000", 10);
+const port = Number.parseInt(process.argv[2] ?? "3010", 10);
 const url = `http://localhost:${port}`;
 
 function key() {

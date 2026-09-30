@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole, getCurrentUser } from "@/lib/dal";
 import { getAdminOverview } from "@/lib/queries";
-import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { ADMIN_NAV } from "./layout";
+import { PageHeader } from "@/components/portal/portal-shell";
 import {
   Badge,
   Card,
@@ -15,32 +14,24 @@ import { isStale, timeAgo } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin" };
 
-const SECTIONS = [
-  { href: "/admin/buses", label: "Buses", icon: "🚌", blurb: "Fleet, capacity and assignment" },
-  { href: "/admin/routes", label: "Routes", icon: "🗺️", blurb: "Routes and stop order" },
-  { href: "/admin/stops", label: "Stops", icon: "📍", blurb: "Pickup points and map positions" },
-  { href: "/admin/students", label: "Students", icon: "🎓", blurb: "Enrollments and bus allocation" },
-  { href: "/admin/drivers", label: "Drivers", icon: "🧑‍✈️", blurb: "Driver records and licences" },
-  { href: "/admin/live", label: "Live map", icon: "📡", blurb: "All buses, live (Phase 3)" },
-  { href: "/admin/reports", label: "Reports", icon: "📊", blurb: "Attendance export (Phase 5)" },
-];
+/** Blurbs for the quick links; the sidebar labels live in the layout. */
+const SHORTCUTS: Record<string, string> = {
+  "/admin/trips": "Schedule, run and review today's runs",
+  "/admin/students": "Enrol students onto buses and stops",
+  "/admin/stops": "Pickup points and map positions",
+  "/admin/routes": "Routes, stop order and timings",
+  "/admin/buses": "Fleet, capacity and route assignment",
+  "/admin/drivers": "Driver records, licences and buses",
+  "/admin/alerts": "Emergencies and breakdowns",
+  "/admin/reports": "Attendance history and export",
+};
 
 export default async function AdminDashboard() {
-  await requireRole(Role.ADMIN);
-  const user = await getCurrentUser();
   const overview = await getAdminOverview();
-
-  const nav = [
-    { href: "/admin", label: "Overview", icon: "📊", exact: true },
-    ...SECTIONS.map((s) => ({ href: s.href, label: s.label, icon: s.icon })),
-  ];
+  const shortcuts = ADMIN_NAV.filter((n) => SHORTCUTS[n.href]);
 
   return (
-    <PortalShell
-      userName={user?.name ?? "Admin"}
-      roleLabel="Administrator"
-      nav={nav}
-    >
+    <>
       <PageHeader
         title="Transport overview"
         description="Everything happening across the fleet right now."
@@ -76,14 +67,7 @@ export default async function AdminDashboard() {
         </div>
 
         <Card>
-          <CardTitle
-            hint="Buses that have reported a position recently"
-            action={
-              <Link href="/admin/live" className="text-xs font-medium text-brand-700 hover:underline">
-                Open live map
-              </Link>
-            }
-          >
+          <CardTitle hint="Buses that have reported a position recently">
             Fleet positions
           </CardTitle>
 
@@ -146,7 +130,7 @@ export default async function AdminDashboard() {
         <div>
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Manage</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {SECTIONS.map((section) => (
+            {shortcuts.map((section) => (
               <Link
                 key={section.href}
                 href={section.href}
@@ -158,12 +142,14 @@ export default async function AdminDashboard() {
                 <p className="mt-2 text-sm font-medium text-slate-900">
                   {section.label}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">{section.blurb}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {SHORTCUTS[section.href]}
+                </p>
               </Link>
             ))}
           </div>
         </div>
       </div>
-    </PortalShell>
+    </>
   );
 }

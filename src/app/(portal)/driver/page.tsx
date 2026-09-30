@@ -11,7 +11,7 @@ import {
   EmptyState,
   StatTile,
 } from "@/components/ui/primitives";
-import { formatTime } from "@/lib/utils";
+import { formatDate, formatTime } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Driver panel" };
 
@@ -24,6 +24,41 @@ export default async function DriverDashboard() {
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
 
+  const tripSelect = {
+    id: true,
+    status: true,
+    direction: true,
+    date: true,
+    startedAt: true,
+    scheduledStart: true,
+    bus: {
+      select: {
+        id: true,
+        busNumber: true,
+        registrationNo: true,
+        capacity: true,
+        onboardCount: true,
+        lastLocationAt: true,
+      },
+    },
+    route: {
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        routeStops: {
+          orderBy: { stopOrder: "asc" },
+          select: {
+            id: true,
+            stopOrder: true,
+            scheduledHHMM: true,
+            stop: { select: { id: true, name: true, address: true, lat: true, lng: true } },
+          },
+        },
+      },
+    },
+  } as const;
+
   const trip = await prisma.trip.findFirst({
     where: {
       driverId: session.userId,
@@ -31,42 +66,42 @@ export default async function DriverDashboard() {
       status: { in: ["ONGOING", "SCHEDULED"] },
     },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      status: true,
-      direction: true,
-      startedAt: true,
-      scheduledStart: true,
-      bus: {
-        select: {
-          id: true,
-          busNumber: true,
-          registrationNo: true,
-          capacity: true,
-          onboardCount: true,
-          lastLocationAt: true,
-        },
-      },
-      route: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          routeStops: {
-            orderBy: { stopOrder: "asc" },
-            select: {
-              id: true,
-              stopOrder: true,
-              scheduledHHMM: true,
-              stop: { select: { id: true, name: true, address: true, lat: true, lng: true } },
-            },
-          },
-        },
-      },
-    },
+    select: tripSelect,
   });
 
-  const summary = trip ? await getTripPickupSummary(trip.id) : null;
+  /**
+   * What to show when this driver has nothing booked for today.
+   *
+   * A blank screen is the wrong answer for someone who has opened the app on
+   * their day off, or before the admin has published tomorrow's roster: the
+   * route and stop list are the same either way, and the only thing that
+   * changes is the heading. Two separate lookups rather than one with an `OR`,
+   * because "the next trip" and "the most recent trip" are opposite sort
+   * directions and an `OR` cannot rank them.
+   */
+  const [nextTrip, lastTrip] = trip
+    ? [null, null]
+    : await Promise.all([
+        prisma.trip.findFirst({
+          where: {
+            driverId: session.userId,
+            date: { gte: end },
+            status: { in: ["SCHEDULED", "ONGOING"] },
+          },
+          orderBy: [{ date: "asc" }, { scheduledStart: "asc" }],
+          select: tripSelect,
+        }),
+        prisma.trip.findFirst({
+          where: { driverId: session.userId, status: "COMPLETED" },
+          orderBy: [{ date: "desc" }, { endedAt: "desc" }],
+          select: tripSelect,
+        }),
+      ]);
+
+  const shown = trip ?? nextTrip ?? lastTrip;
+  const isFallback = !trip && shown !== null;
+
+  const summary = shown ? await getTripPickupSummary(shown.id) : null;
 
   const totalWaiting = summary
     ? [...summary.byStop.values()].reduce((acc, b) => acc + b.waiting.length, 0)
@@ -97,9 +132,23 @@ export default async function DriverDashboard() {
         description="Your route for today, with the students waiting at each stop."
       />
 
-      {!trip ? (
+      {isFallback && shown ? (
+        <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 inset-ring-1 inset-ring-blue-200">
+          <p className="font-medium">
+            {nextTrip
+              ? `Nothing is booked for you today. Showing your next run, on ${formatDate(shown.date)}.`
+              : `Nothing is booked for you today. Showing the last trip you ran, on ${formatDate(shown.date)}.`}
+          </p>
+          <p className="mt-0.5 text-xs">
+            The route and stop order below are the ones to expect. Attendance cannot be
+            marked on a trip that is not today&apos;s.
+          </p>
+        </div>
+      ) : null}
+
+      {!shown ? (
         <EmptyState
-          title="No trip scheduled for today"
+          title="No trip scheduled"
           description="When the admin schedules a run for you, the stop order and the student checklist appear here."
         />
       ) : (
@@ -107,14 +156,14 @@ export default async function DriverDashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
               label="Bus"
-              value={trip.bus.busNumber}
-              sub={trip.bus.registrationNo}
+              value={shown.bus.busNumber}
+              sub={shown.bus.registrationNo}
               tone="blue"
             />
             <StatTile
               label="Route"
-              value={trip.route.code}
-              sub={trip.route.name}
+              value={shown.route.code}
+              sub={shown.route.name}
             />
             <StatTile
               label="Waiting now"
@@ -124,7 +173,7 @@ export default async function DriverDashboard() {
             />
             <StatTile
               label="Picked up"
-              value={`${totalPicked}/${trip.bus.capacity}`}
+              value={`${totalPicked}/${shown.bus.capacity}`}
               sub="seats vs capacity"
               tone="emerald"
             />
@@ -133,13 +182,13 @@ export default async function DriverDashboard() {
           <Card>
             <CardTitle
               hint={
-                trip.direction === "PICKUP"
+                shown.direction === "PICKUP"
                   ? "Morning run · home to college"
                   : "Evening run · college to home"
               }
               action={
-                <Badge tone={trip.status === "ONGOING" ? "emerald" : "slate"}>
-                  {trip.status}
+                <Badge tone={shown.status === "ONGOING" ? "emerald" : "slate"}>
+                  {shown.status}
                 </Badge>
               }
             >
@@ -147,10 +196,8 @@ export default async function DriverDashboard() {
             </CardTitle>
 
             <ol className="space-y-0">
-              {trip.route.routeStops.map((rs, index) => {
+              {shown.route.routeStops.map((rs, index) => {
                 const bucket = summary?.byStop.get(rs.stop.id);
-                const stopEvent = trip.status === "ONGOING" ? null : null;
-                void stopEvent;
 
                 return (
                   <li key={rs.id} className="flex gap-3">
@@ -158,7 +205,7 @@ export default async function DriverDashboard() {
                       <span className="mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
                         {index + 1}
                       </span>
-                      {index < trip.route.routeStops.length - 1 ? (
+                      {index < shown.route.routeStops.length - 1 ? (
                         <span className="my-0.5 w-0.5 flex-1 bg-slate-200" />
                       ) : null}
                     </div>
@@ -207,25 +254,29 @@ export default async function DriverDashboard() {
 
           <Card>
             <CardTitle hint="You will be able to tap each student to mark them picked up from Phase 4">
-              Today&apos;s schedule
+              {isFallback ? "Trip schedule" : "Today’s schedule"}
             </CardTitle>
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               <div>
+                <dt className="text-xs text-slate-500">Date</dt>
+                <dd className="font-medium text-slate-900">{formatDate(shown.date)}</dd>
+              </div>
+              <div>
                 <dt className="text-xs text-slate-500">Scheduled start</dt>
                 <dd className="font-medium text-slate-900">
-                  {formatTime(trip.scheduledStart)}
+                  {formatTime(shown.scheduledStart)}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Started</dt>
                 <dd className="font-medium text-slate-900">
-                  {formatTime(trip.startedAt)}
+                  {formatTime(shown.startedAt)}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Direction</dt>
                 <dd className="font-medium text-slate-900">
-                  {trip.direction === "PICKUP" ? "Home → college" : "College → home"}
+                  {shown.direction === "PICKUP" ? "Home → college" : "College → home"}
                 </dd>
               </div>
             </dl>

@@ -127,3 +127,48 @@ export const enrollmentSchema = z.object({
     .trim()
     .regex(/^\d{4}-\d{2}$/, { error: "Use the format YYYY-YY, e.g. 2026-27" }),
 });
+
+/** Admin-created driver account. */
+export const driverSchema = z.object({
+  name: z.string().trim().min(2, { error: "Name must be at least 2 characters" }),
+  email: z.email({ error: "Enter a valid email address" }).trim().toLowerCase(),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[0-9+\-\s()]{7,15}$/, { error: "Enter a valid phone number" })
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  licenseNo: z.string().trim().min(4, { error: "Licence number is required" }),
+  licenseExpiry: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Use the format YYYY-MM-DD" })
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  experienceYr: z.coerce.number().int().min(0).max(60).optional(),
+  // Blank on edit means "leave the password alone".
+  password: z
+    .string()
+    .min(8, { error: "At least 8 characters" })
+    .regex(/[a-zA-Z]/, { error: "Must contain a letter" })
+    .regex(/[0-9]/, { error: "Must contain a number" })
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+});
+
+export const tripSchema = z.object({
+  busId: z.string().min(1),
+  driverId: z.string().min(1),
+  direction: z.enum(["PICKUP", "DROPOFF"]),
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Use the format YYYY-MM-DD" }),
+  scheduledStart: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: "Use 24-hour HH:MM" }),
+});

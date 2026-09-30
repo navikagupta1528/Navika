@@ -138,6 +138,13 @@ export async function getTripPickupSummary(tripId: string) {
   return { records, byStop };
 }
 
+/** Count of alerts still waiting on an admin, used for the sidebar badge. */
+export async function getAdminAlerts() {
+  return prisma.emergencyAlert.count({
+    where: { status: { in: ["OPEN", "ACKNOWLEDGED"] } },
+  });
+}
+
 /** Fleet overview for the admin dashboard. */
 export async function getAdminOverview() {
   const today = new Date();

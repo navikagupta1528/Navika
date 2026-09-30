@@ -15,7 +15,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { Role } from "../src/generated/prisma/enums";
 
-const PORT = process.argv[2] ?? "3000";
+const PORT = process.argv[2] ?? "3010";
 const BASE = `http://127.0.0.1:${PORT}`;
 
 /**

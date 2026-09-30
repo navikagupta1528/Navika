@@ -411,6 +411,12 @@ model EmergencyAlert {
   resolvedBy   User?  @relation("AlertResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
   resolvedAt   DateTime?
 
+  // When an admin first saw the alert, and what actually happened. Both are
+  // needed for the incident trail: "OPEN" alone cannot tell whether nobody
+  // was looking or somebody was looking and did nothing.
+  acknowledgedAt DateTime?
+  resolutionNote String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

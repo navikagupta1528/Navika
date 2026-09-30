@@ -19,8 +19,10 @@
     "setup": "npm run setup:db && npm run db:migrate && npm run db:seed",
     "smoke": "tsx scripts/smoke-socket.ts",
     "smoke:auth": "tsx scripts/smoke-auth.ts",
+    "smoke:admin": "tsx scripts/smoke-admin.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
-    "smoke:all": "npm run smoke && npm run smoke:auth"
+    "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
