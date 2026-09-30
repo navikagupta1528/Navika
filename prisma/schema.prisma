@@ -442,10 +442,28 @@ model Notification {
 /// Server-side cache of route durations from OSRM so we stay inside the
 /// public API's rate limit.
 model EtaCache {
-  id         String   @id @default(cuid())
-  cacheKey   String   @unique
-  seconds    Int
-  meters     Int?
-  source     String // "osrm" | "haversine"
+  id       String @id @default(cuid())
+  cacheKey String @unique
+  seconds  Int
+  meters   Int?
+  source   String // "osrm" | "haversine"
+
+  /// The road-following polyline, as `[lng, lat]` pairs, exactly as OSRM
+  /// returned it.
+  ///
+  /// Storing the geometry is the whole reason the cache exists for a route
+  /// lookup. Without it, a cache hit can only return the distance and duration,
+  /// and the caller has to fall back to straight lines between stops — so the
+  /// map would draw real roads on the first render and crude straight lines for
+  /// the next six hours, while still reporting the road distance. Caching the
+  /// answer to a question and then answering a *different* question on the
+  /// second render is worse than not caching at all.
+  ///
+  /// Null for single-leg lookups (which ask for `overview=false`) and for
+  /// haversine fallbacks, neither of which has any geometry to keep.
+  geometry Json?
+
   computedAt DateTime @default(now())
+
+  @@index([computedAt])
 }

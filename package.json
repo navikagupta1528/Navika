@@ -20,6 +20,7 @@
     "smoke": "tsx scripts/smoke-socket.ts",
     "smoke:auth": "tsx scripts/smoke-auth.ts",
     "smoke:admin": "tsx scripts/smoke-admin.ts",
+    "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
     "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build"

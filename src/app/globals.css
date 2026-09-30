@@ -100,3 +100,82 @@ body {
 .maplibregl-ctrl-attrib {
   font-size: 10px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Map markers                                                         */
+/*                                                                     */
+/* Plain CSS rather than utility classes: these elements are built by */
+/* `document.createElement` inside map-canvas.tsx, so there is no JSX  */
+/* for Tailwind to scan. Keep the class names in sync with that file.  */
+/* ------------------------------------------------------------------ */
+
+.navika-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.25),
+    0 4px 8px rgb(15 23 42 / 0.15);
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1;
+  /* Markers must never swallow a map drag that starts on top of them. */
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.navika-marker:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+
+.navika-marker:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.navika-marker:disabled {
+  cursor: default;
+}
+
+/* Stops: a numbered circle, sized by the route order. */
+.navika-marker--stop {
+  width: 1.75rem;
+  height: 1.75rem;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+/* Deactivated stops stay on the map — a trip that ran last month still
+   refers to them — but must not read as something to act on. */
+.navika-marker--muted {
+  background: #94a3b8;
+  opacity: 0.75;
+}
+
+/* Vehicles: a pill, because a bus number is not a single digit. */
+.navika-marker--vehicle {
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding-inline: 0.5rem;
+  background: #059669;
+  color: #fff;
+  font-size: 0.6875rem;
+}
+
+/* A bus that has not reported recently. Desaturated rather than hidden:
+   "we lost it" and "it is not running" are different facts. */
+.navika-marker--stale {
+  background: #b45309;
+}
+
+.navika-marker--dragging {
+  transform: scale(1.25);
+  box-shadow:
+    0 2px 4px rgb(15 23 42 / 0.3),
+    0 8px 16px rgb(15 23 42 / 0.25);
+  cursor: grabbing;
+}

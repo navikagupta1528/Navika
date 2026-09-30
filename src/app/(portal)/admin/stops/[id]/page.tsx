@@ -10,6 +10,7 @@ import { EntityForm } from "@/components/admin/entity-form";
 import { stopDefaults } from "@/lib/admin/form-defs";
 import { deleteStop, saveStop, toggleStopActive } from "@/app/actions/admin/stops";
 import { ActionForm } from "@/components/admin/action-form";
+import { RouteMap } from "@/components/map/route-map";
 import { formatDate } from "@/lib/utils";
 
 export default async function StopDetailPage({
@@ -36,6 +37,33 @@ export default async function StopDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
+          <Card>
+            <CardTitle hint="The pin the driver sees on the pickup sheet.">
+              Location
+            </CardTitle>
+            <RouteMap
+              height="18rem"
+              stops={[
+                {
+                  id: stop.id,
+                  name: stop.name,
+                  lat: stop.lat,
+                  lng: stop.lng,
+                  order: 1,
+                  isActive: stop.isActive,
+                  detail: stop.address,
+                },
+              ]}
+              fallbackViewport={{ center: { lat: stop.lat, lng: stop.lng }, zoom: 15 }}
+              emptyMessage="This stop has no coordinates yet. Add them in the form below."
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {stop.lat.toFixed(5)}, {stop.lng.toFixed(5)} — a stop placed in the wrong
+              spot sends every student to the wrong junction, so check this against the
+              road rather than trusting the address.
+            </p>
+          </Card>
+
           <Card>
             <CardTitle hint="Changes take effect on the next scheduled trip.">
               Edit stop

@@ -11,6 +11,7 @@ import {
   type ActionState,
 } from "@/lib/admin/action-state";
 import { readForm } from "@/lib/admin/fields";
+import { isSameOrder, stopOrderPlan, validateReorder } from "@/lib/admin/route-order";
 import { routeFields } from "@/lib/admin/form-defs";
 import { routeSchema } from "@/lib/validations";
 
@@ -225,4 +226,70 @@ export async function moveRouteStop(formData: FormData): Promise<void> {
   ]);
 
   revalidatePath(`/admin/routes/${routeId}`);
+}
+
+/**
+ * Outcome of a drag-to-reorder.
+ *
+ * Returned rather than thrown because this action is invoked directly from a
+ * client component, not through `useActionState`. A thrown Server Action error
+ * reaches the browser as a generic failure in production — Next redacts the
+ * message — so a validation problem would surface as "something went wrong"
+ * with no way for the admin to tell what to fix.
+ */
+export type ReorderResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Set the whole stop sequence in one go.
+ *
+ * `moveRouteStop` swaps neighbours, which is the right shape for the up/down
+ * buttons. Dragging a marker on the map is not a swap, so it needs an action
+ * that writes the complete order.
+ *
+ * The submitted list must be a permutation of exactly the stops currently on
+ * this route. That check is the whole point of the action: a stale browser tab
+ * holding a stop that has since been removed, or a partial list from a
+ * truncated request, would otherwise silently drop a student from the route.
+ */
+export async function reorderRouteStops(formData: FormData): Promise<ReorderResult> {
+  await assertAdmin();
+
+  const routeId = String(formData.get("routeId") ?? "");
+  const orderedIds = String(formData.get("ids") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!routeId) return { ok: false, error: "Route not specified." };
+
+  const current = await prisma.routeStop.findMany({
+    where: { routeId },
+    orderBy: { stopOrder: "asc" },
+    select: { id: true, stopOrder: true },
+  });
+
+  const currentIds = current.map((s) => s.id);
+  const check = validateReorder(current, orderedIds);
+  if (!check.ok) return { ok: false, error: check.error };
+
+  // Nothing to do. Skipping the write also avoids a pointless revalidate.
+  if (isSameOrder(currentIds, check.order)) return { ok: true };
+
+  const { park, assign } = stopOrderPlan(currentIds, check.order);
+
+  try {
+    await prisma.$transaction([
+      ...park.map((s) =>
+        prisma.routeStop.update({ where: { id: s.id }, data: { stopOrder: s.stopOrder } }),
+      ),
+      ...assign.map((s) =>
+        prisma.routeStop.update({ where: { id: s.id }, data: { stopOrder: s.stopOrder } }),
+      ),
+    ]);
+  } catch (error) {
+    return { ok: false, error: describeWriteError(error) };
+  }
+
+  revalidatePath(`/admin/routes/${routeId}`);
+  return { ok: true };
 }

@@ -20,7 +20,16 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 
-const PORT = process.argv[2] ?? "3000";
+/**
+ * Where the app under test is listening.
+ *
+ * `PORT` from `.env` first, so the smoke tests follow the server instead of
+ * disagreeing with it, then an explicit argument for testing a different port.
+ * The two earlier defaults here were 3000 and 3010 in sibling scripts, which
+ * meant `npm run smoke:admin` failed with ECONNREFUSED on a correctly running
+ * dev server.
+ */
+const PORT = process.argv[2] ?? process.env.PORT ?? "3000";
 const BASE = `http://127.0.0.1:${PORT}`;
 const PASSWORD = "navika123";
 
@@ -281,6 +290,26 @@ async function main() {
         `GET /admin/stops/${stop.id}`,
         `-> ${status}`,
       );
+
+      // The map is a client component, so the server HTML cannot prove the
+      // canvas mounts. What it can prove is that the coordinates reached the
+      // component as props, which is the half that silently breaks: a stop
+      // page that renders its heading and its form while the map gets nothing
+      // looks identical from here.
+      const stopWithCoords = await prisma.stop.findUnique({
+        where: { id: stop.id },
+        select: { lat: true, lng: true },
+      });
+      report(
+        status === 200 &&
+          stopWithCoords !== null &&
+          html.includes(String(stopWithCoords.lat.toFixed(5))) &&
+          html.includes(String(stopWithCoords.lng.toFixed(5))),
+        `GET /admin/stops/${stop.id} passes the coordinates to the map`,
+        stopWithCoords
+          ? `expected ${stopWithCoords.lat.toFixed(5)}, ${stopWithCoords.lng.toFixed(5)} in the payload`
+          : "stop has no coordinates",
+      );
     }
     if (route) {
       const { status, html } = await getPage(`/admin/routes/${route.id}`);
@@ -289,6 +318,24 @@ async function main() {
         status === 200 && text.includes(route.name) && text.includes("Stop sequence"),
         `GET /admin/routes/${route.id} shows the stop sequence`,
         `-> ${status}`,
+      );
+
+      // Every stop on the route must reach the map, or the drawn line is
+      // quietly shorter than the route the admin is editing.
+      const routeStops = await prisma.routeStop.count({ where: { routeId: route.id } });
+      report(
+        status === 200 && routeStops > 0 && text.includes("Route map"),
+        `GET /admin/routes/${route.id} renders the route map`,
+        routeStops > 0 ? `${routeStops} stops sent` : "route has no stops",
+      );
+
+      // The distance caption is the visible proof that the OSRM chain ran
+      // during a page render and that the answer reached the client. The
+      // "(estimated)" suffix appears when the routing server was unreachable.
+      report(
+        status === 200 && /\d+(\.\d+)?\s?(m|km)\b/.test(text) && /by road|estimated/.test(text),
+        `GET /admin/routes/${route.id} reports the road distance`,
+        "expected a distance caption on the map",
       );
     }
     if (bus) {

@@ -19,6 +19,8 @@ import {
   deleteRoute,
 } from "@/app/actions/admin/routes";
 import { formatTime } from "@/lib/utils";
+import { getRouteGeometry } from "@/lib/osrm";
+import { RouteMapEditor } from "@/components/admin/route-map-editor";
 
 export default async function RouteDetailPage({
   params,
@@ -40,6 +42,23 @@ export default async function RouteDetailPage({
 
   const routeDeletable = route._count.buses === 0 && route._count.trips === 0;
 
+  /**
+   * Road-following geometry for the map.
+   *
+   * Fetched here rather than in the browser so the result is cached in
+   * `EtaCache` and shared by every visit to this route, and so the component
+   * receives plain coordinates. `getRouteGeometry` already degrades to
+   * straight-line points when OSRM is unreachable, so the map always draws
+   * something; the flag alongside it is what tells the admin which one they are
+   * looking at.
+   */
+  const road =
+    route.routeStops.length >= 2
+      ? await getRouteGeometry(
+          route.routeStops.map((rs) => ({ lat: rs.stop.lat, lng: rs.stop.lng })),
+        )
+      : null;
+
   return (
     <>
       <PageHeader
@@ -54,6 +73,33 @@ export default async function RouteDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
+          {route.routeStops.length > 0 ? (
+            <Card>
+              <CardTitle hint="Drag a numbered marker to move that stop in the sequence.">
+                Route map
+              </CardTitle>
+              <RouteMapEditor
+                routeId={route.id}
+                routeCode={route.code}
+                stops={route.routeStops.map((rs) => ({
+                  routeStopId: rs.id,
+                  stopId: rs.stop.id,
+                  name: rs.stop.name,
+                  address: rs.stop.address,
+                  lat: rs.stop.lat,
+                  lng: rs.stop.lng,
+                  stopOrder: rs.stopOrder,
+                  scheduledHHMM: rs.scheduledHHMM,
+                  isActive: rs.stop.isActive,
+                  enrolled: rs.stop._count.enrollments,
+                }))}
+                geometry={road?.line}
+                roadDistanceMeters={road?.meters ?? null}
+                geometryIsEstimated={road?.source !== "osrm"}
+              />
+            </Card>
+          ) : null}
+
           <Card>
             <CardTitle hint="The order here is the order the bus visits them.">
               Stop sequence
