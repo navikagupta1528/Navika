@@ -210,6 +210,28 @@ export async function getBus(id: string) {
       onboardCount: true,
       createdAt: true,
       /**
+       * The flag the simulator sets, so this screen can say whether the bus is
+       * actually being driven rather than inferring it from a position that might
+       * simply be recent.
+       */
+      isSimulated: true,
+      /**
+       * Route and its stop count.
+       *
+       * The count is what decides whether the bus can be simulated at all: the
+       * movement maths needs a line to move along, and a route with one stop has
+       * none. Reading it here means the button can be disabled with a reason
+       * instead of failing after the click.
+       */
+      route: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          _count: { select: { routeStops: true } },
+        },
+      },
+      /**
        * Active enrolments only.
        *
        * A filtered relation count, which is both what the "Enrolled" figure

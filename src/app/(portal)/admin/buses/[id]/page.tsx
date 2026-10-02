@@ -8,6 +8,8 @@ import { Card, CardTitle, Badge, EmptyState } from "@/components/ui/primitives";
 import { DetailList } from "@/components/admin/data-table";
 import { EntityForm, QuickForm } from "@/components/admin/entity-form";
 import { ActionForm } from "@/components/admin/action-form";
+import { SimulationToggle } from "@/components/admin/simulation-toggle";
+import { isSimulating, simulationProgress } from "@/server/simulator-runner";
 import { busDefaults, busStatusOptions } from "@/lib/admin/form-defs";
 import { saveBus, assignBusDriver, unassignBusDriver, setBusStatus, deleteBus } from "@/app/actions/admin/buses";
 import { formatDate } from "@/lib/utils";
@@ -38,6 +40,8 @@ export default async function BusDetailPage({
   const past = bus.busAssignments.filter((a) => a.validTo != null);
 
   const busDeletable = bus._count.trips === 0 && bus._count.enrollments === 0;
+
+  const progress = simulationProgress(bus.id);
 
   const fields = busDefaults(bus).map((f) =>
     f.name === "routeId"
@@ -98,6 +102,50 @@ export default async function BusDetailPage({
               <p className="mt-2 text-xs text-slate-500">
                 A bus must be <strong>active</strong> to have trips scheduled. Maintenance keeps
                 its history and students but takes it off the road.
+              </p>
+            </div>
+
+            {/*
+              Route simulation, in its own block rather than bolted onto the
+              status form. It is a different kind of action - it starts a process
+              rather than setting a column - and mixing the two would suggest that
+              taking a bus into maintenance also stops it moving.
+            */}
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <p className="label">Demo mode</p>
+              <SimulationToggle
+                busId={bus.id}
+                running={isSimulating(bus.id)}
+                hasRoute={(bus.route?._count.routeStops ?? 0) >= 2}
+              />
+              {/*
+                A live readout, read at render time. It is only ever rendered on a
+                page load rather than ticking, which is enough here - the map is
+                where you watch the bus move, and this line exists to answer "is it
+                actually driving, or is the badge lying again".
+              */}
+              {progress && progress.totalMeters > 0 ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  {Math.round((progress.alongMeters / progress.totalMeters) * 100)}% along the
+                  route, heading {progress.leg}.
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-slate-500">
+                {bus.isSimulated && !isSimulating(bus.id) ? (
+                  <>
+                    This bus is still flagged as simulated from a previous run. That
+                    flag is stored, but the movement lives in the server process and
+                    did not survive a restart - press Simulate to drive it again.
+                  </>
+                ) : (
+                  <>
+                    Drives the bus along{" "}
+                    {bus.route ? bus.route.name : "its route"} with no driver, so
+                    live tracking and the parent screens can be demonstrated without
+                    a vehicle on the road. Positions are broadcast to the map but
+                    are not part of any trip.
+                  </>
+                )}
               </p>
             </div>
           </Card>

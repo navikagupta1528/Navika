@@ -13,10 +13,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { RouteMap } from "@/components/map/route-map";
 import type { MapVehicle } from "@/components/map/map-types";
-import { listenOnSocket, useSocketConnection } from "@/lib/realtime";
-import { EV, type BusLocationPayload } from "@/lib/socket-events";
+import { listenOnSocket, useSocketConnection, useStopArrivals } from "@/lib/realtime";
+import { EV, type BusLocationPayload, type StopArrivalPayload } from "@/lib/socket-events";
 import { describeFreshness, freshnessFromAge } from "@/lib/tracking";
 import { Badge } from "@/components/ui/primitives";
+
+/** How many stop announcements the map keeps on screen. */
+const MAX_ANNOUNCEMENTS = 6;
 
 export type FleetBus = {
   id: string;
@@ -42,6 +45,7 @@ export type FleetBus = {
 export function FleetMap({ buses, height = "30rem" }: { buses: FleetBus[]; height?: string }) {
   const [live, setLive] = useState<Record<string, BusLocationPayload>>({});
   const [now, setNow] = useState(() => Date.now());
+  const [announcements, setAnnouncements] = useState<StopArrivalPayload[]>([]);
 
   /**
    * The server's view is the starting point for the ordering guard, so the
@@ -83,6 +87,23 @@ export function FleetMap({ buses, height = "30rem" }: { buses: FleetBus[]; heigh
   );
 
   const connection = useSocketConnection();
+
+  /*
+   * Stop announcements, newest first.
+   *
+   * Bounded at MAX_ANNOUNCEMENTS and trimmed on arrival rather than by a timer,
+   * because this list only ever grows when something happens. A fleet map left
+   * open over a morning of service would otherwise accumulate an arrival for
+   * every stop on every route - hundreds of rows nobody will ever scroll to, and
+   * a memory leak that only shows up in a long-running browser tab.
+   */
+  useStopArrivals((payload) => {
+    if (!payload?.busId || !payload.at) return;
+    setAnnouncements((prev) => [
+      payload,
+      ...prev.filter((a) => !(a.busId === payload.busId && a.stopId === payload.stopId)),
+    ].slice(0, MAX_ANNOUNCEMENTS));
+  });
 
   const vehicles: MapVehicle[] = buses.map((bus) => {
     const payload = live[bus.id];
@@ -134,6 +155,34 @@ export function FleetMap({ buses, height = "30rem" }: { buses: FleetBus[]; heigh
           Socket {connection === "offline" ? "disconnected" : "connecting"} — positions shown
           are the last the server received.
         </p>
+      ) : null}
+
+      {/*
+        Stop announcements. Rendered below the map rather than over it, because a
+        toast on top of the map covers the very bus it is describing.
+
+        `aria-live="polite"` so a screen reader announces an arrival without
+        interrupting whatever the user is doing. A simulated bus is labelled as
+        such: an arrival from a demo run must never read as a real vehicle reaching
+        a real gate.
+      */}
+      {announcements.length > 0 ? (
+        <div aria-live="polite" className="rounded-lg bg-slate-50 px-3 py-2">
+          <p className="text-xs font-medium text-slate-500">Latest arrivals</p>
+          <ul className="mt-1 space-y-0.5">
+            {announcements.map((a) => {
+              const label = buses.find((b) => b.id === a.busId)?.label ?? a.busId;
+              return (
+                <li key={`${a.busId}-${a.stopId}-${a.at}`} className="text-xs text-slate-600">
+                  <span className="font-medium text-slate-900">{label}</span> reached {a.stopName}
+                  {a.simulated ? (
+                    <span className="ml-1 text-slate-400">(simulated)</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : null}
     </div>
   );

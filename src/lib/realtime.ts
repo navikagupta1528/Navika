@@ -17,7 +17,7 @@
  */
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { io, type Socket } from "socket.io-client";
-import { EV, SOCKET_PATH, type BusLocationPayload } from "@/lib/socket-events";
+import { EV, SOCKET_PATH, type BusLocationPayload, type StopArrivalPayload } from "@/lib/socket-events";
 
 export type ConnectionState = "connecting" | "live" | "offline";
 
@@ -142,4 +142,39 @@ export function useBusLocation(
       s.emit(EV.watchUnsubscribe, { busId });
     };
   }, [busId]);
+}
+
+/**
+ * Announcements of buses reaching stops, for as long as the component is mounted.
+ *
+ * Deliberately emits nothing to subscribe with. The server joins admins to the
+ * fleet room on connection, and a non-admin is only ever in the rooms for buses
+ * they are entitled to watch — which is the right scoping anyway, since a parent
+ * should not see arrivals for buses their own children are not on.
+ *
+ * Sending `watchSubscribe` here would be actively harmful: that handler requires a
+ * `busId` and replies `BAD_REQUEST` without one, so every fleet-map viewer would
+ * collect a server error on load.
+ *
+ * Bounding how many announcements a component keeps is the caller's job, not this
+ * hook's: the list lives in the caller, so trimming it here would mean the hook
+ * owning state it does not use.
+ */
+export function useStopArrivals(onArrival: (payload: StopArrivalPayload) => void): void {
+  const latest = useRef(onArrival);
+
+  useEffect(() => {
+    latest.current = onArrival;
+  });
+
+  useEffect(() => {
+    const s = getSocket();
+    const handler = (payload: StopArrivalPayload) => latest.current(payload);
+
+    s.on(EV.stopArrival, handler);
+
+    return () => {
+      s.off(EV.stopArrival, handler);
+    };
+  }, []);
 }

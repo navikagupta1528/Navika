@@ -24,6 +24,7 @@ import { createServer } from "node:http";
 import next from "next";
 import { attachSocketServer, setSocketServer } from "./src/server/socket";
 import { isSocketRequest } from "./src/lib/socket-events";
+import { resetStaleSimulationFlags } from "./src/server/simulator-runner";
 
 // `npm start` passes --prod instead of setting NODE_ENV inline, because
 // `NODE_ENV=production node server.js` is not valid in PowerShell or cmd.exe.
@@ -51,6 +52,23 @@ async function main() {
    * — otherwise we try to set headers on a response that is already finished.
    */
   const server = createServer();
+
+  /*
+   * Clear simulated flags left over from a previous run of this process.
+   *
+   * `Bus.isSimulated` is stored, but the thing that makes a bus move is a
+   * setInterval held in memory, so a deploy or a crash leaves the flag set and the
+   * bus standing still - the fleet screen then shows a "simulated" badge next to a
+   * marker that no longer moves, which is exactly the dead-column problem this
+   * feature was added to fix.
+   *
+   * Correct only because there is a single server process. `render.yaml` pins
+   * `numInstances: 1` for this reason, and so does the Dockerfile's one-process
+   * design; if this app ever scales horizontally this call would have to be
+   * replaced by an ownership table or a lease, because one instance clearing
+   * another's flags would stop buses that are driving perfectly well.
+   */
+  await resetStaleSimulationFlags();
 
   const io = attachSocketServer(server);
   setSocketServer(io);

@@ -87,6 +87,28 @@ export type PickupUpdatePayload = {
   pickedAt: string | null;
 };
 
+/**
+ * A bus reaching a stop.
+ *
+ * Emitted by the simulator, which has no `Trip` to attach a `StopEvent` row to,
+ * and so has nothing to say about a stop except over the socket.
+ */
+export type StopArrivalPayload = {
+  busId: string;
+  stopId: string;
+  stopName: string;
+  /** Server clock, for the same reason `BusLocationPayload.at` is. */
+  at: number;
+  /**
+   * True when this came from a simulated bus rather than a driver's phone.
+   *
+   * Carried so a watching map can label the bus as simulated. Without it a
+   * demonstration run is indistinguishable from a real one on screen, which is
+   * exactly the confusion the `isSimulated` badge exists to prevent elsewhere.
+   */
+  simulated: boolean;
+};
+
 export type SocketErrorPayload = {
   code: "UNAUTHORIZED" | "BAD_REQUEST" | "NOT_DRIVER" | "NO_BUS" | "INTERNAL";
   message: string;

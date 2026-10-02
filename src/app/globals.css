@@ -192,3 +192,15 @@ body {
   color: var(--color-brand-700, #1d4ed8);
   text-decoration: underline;
 }
+
+/* Respect the OS "reduce motion" setting.
+   A pulsing loading skeleton is precisely the kind of repeated motion that
+   triggers vestibular symptoms, and a bus-tracking app gets opened in a moving
+   vehicle more often than most apps do. Tailwind's `animate-pulse` is applied
+   from component markup rather than a variant, so the override cannot live next
+   to it — it has to be a global rule keyed off the same utility class. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
+  }
+}
