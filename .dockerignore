@@ -1,0 +1,35 @@
+# Everything that must never reach the build context.
+#
+# .dockerignore matters more than usual here, not just for image size: the build
+# stage copies the whole tree in, so anything listed below is visible to every
+# `COPY . .` and would be captured in an image layer forever.
+
+# The single most important line in this file.
+.env
+.env*.local
+.env.production
+
+# Written by the local DB bootstrap.
+.navika-db-pw
+
+node_modules
+.next
+.git
+build
+coverage
+
+# Editor and agent tooling - not part of the app, and large.
+.agents
+.claude
+.windsurf
+CLAUDE.md
+skills-lock.json
+.vscode
+.idea
+
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*

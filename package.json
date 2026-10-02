@@ -20,10 +20,15 @@
     "smoke": "tsx scripts/smoke-socket.ts",
     "smoke:auth": "tsx scripts/smoke-auth.ts",
     "smoke:admin": "tsx scripts/smoke-admin.ts",
+    "smoke:tracking": "tsx --conditions=react-server scripts/smoke-tracking.ts",
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
+    "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",
+    "check:runtime-tree": "tsx scripts/check-runtime-tree.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
-    "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin && npm run smoke:tracking",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "docker:build": "docker build -t navika .",
+    "docker:run": "docker run --rm -p 3010:3010 --env-file .env navika"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

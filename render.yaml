@@ -1,0 +1,100 @@
+# Render blueprint for Navika.
+#
+#   1. Push this repo to GitHub.
+#   2. In Render: New -> Blueprint -> point at the repo.
+#   3. Render reads this file, creates the Postgres cluster and the web
+#      service, wires DATABASE_URL between them, and asks you for the three
+#      secrets marked `sync: false`.
+#
+# A free Postgres plan is enough to try it. The bus only sends one position
+# every few seconds, and the EtaCache absorbs the OSRM calls.
+
+databases:
+  - name: navika-db
+    databaseName: navika
+    # "free" is a real plan id, not a placeholder. It expires after 30 days,
+    # which is fine for a trial and fatal for production - switch to "basic-256mb"
+    # (256 MB, ~$7/mo) before anyone relies on this.
+    plan: free
+    postgresMajorVersion: "17"
+
+services:
+  - type: web
+    name: navika
+    # Use the Dockerfile rather than Render's native Node builder. The native
+    # builder runs `next start`, and that has no Socket.IO server attached, so
+    # live tracking would silently never connect. The whole point of
+    # server.ts is that one process serves both the pages and the socket.
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+
+    # Cheapest tier that will not fall over with two drivers and a few hundred
+    # parents on it. Scale up, not the process count.
+    plan: starter
+
+    # Single instance, deliberately. Socket.IO broadcasts from whichever process
+    # holds a driver's connection; with two instances a parent could be connected
+    # to the one that never saw the ping. Scaling out means a Redis adapter
+    # first, which is a deliberate piece of work rather than a config line.
+    numInstances: 1
+
+    # Migrations run once, before this container takes traffic. NOT a startup
+    # command: two containers booting together would race each other, and a
+    # half-applied migration is worse than a failed deploy.
+    preDeployCommand: npx prisma migrate deploy
+
+    # The real endpoint, which returns 503 when Postgres is unreachable. A
+    # hardcoded 200 would keep a broken instance in the load balancer.
+    healthCheckPath: /api/health
+
+    # Socket.IO holds connections open. Render closes idle ones after 100s, and
+    # every reconnect is a thundering herd against the database, so keepalive
+    # is on by default - this just makes the intent explicit.
+    autoDeploy: true
+
+    envVars:
+      # ---- wired automatically by Render -------------------------------
+      - key: DATABASE_URL
+        fromDatabase:
+          name: navika-db
+          property: connectionString
+
+      # ---- you supply these --------------------------------------------
+      #
+      # Every `NEXT_PUBLIC_*` value below is inlined into the client bundle at
+      # BUILD time, not read at request time. Render does expose service
+      # environment variables during the image build, so these work - but
+      # changing one requires a redeploy, not just a restart, or the browser
+      # keeps running the old bundle. This is the single most common reason a
+      # deployed map renders blank or a push subscription silently fails.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false # e.g. https://navika.onrender.com - no trailing slash
+
+      - key: NEXT_PUBLIC_MAP_TILE_URL
+        sync: false # see .env.example; OSM's public tiles are dev-only
+
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false # npx web-push generate-vapid-keys
+
+      # 32+ random bytes. Rotating this logs everyone out.
+      - key: AUTH_SECRET
+        generateValue: true
+
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+      # Web push requires a contact address; browsers reject the subscription
+      # otherwise.
+      - key: VAPID_SUBJECT
+        sync: false # mailto:you@example.com
+
+      # Point at your own OSRM for real traffic; the public demo server is rate
+      # limited and is not a dependency worth building on.
+      - key: OSRM_URL
+        value: https://router.project-osrm.org
+
+      # ---- deliberately NOT set: PORT and HOSTNAME ------------------------
+      # Render injects both, and hardcoding them here risks disagreeing with
+      # the port the platform actually routes to. The Dockerfile's defaults
+      # (`PORT=3010`, `HOSTNAME=0.0.0.0`) exist for a local `docker run`, and
+      # whatever Render sets wins over them.
