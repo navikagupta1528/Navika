@@ -103,6 +103,49 @@ async function main() {
     void handle(req, res);
   });
 
+  /*
+   * A port clash is the single most common way this fails to start, and Node's
+   * own message for it is close to useless: `EADDRINUSE: address already in use
+   * 0.0.0.0:3010`, repeated by an uncaughtException handler, naming neither the
+   * process holding the port nor the way out. Someone hitting it has no reason
+   * to guess that the fix is a taskkill.
+   *
+   * So: catch it on the server's own 'error' event, name the likely cause, and
+   * print a command that actually resolves it. `listen` only reports failure
+   * asynchronously through this event, which is why it needs handling here
+   * rather than around the call.
+   *
+   * This is the *second* line of defence, and the first is Next's own. When the
+   * port is held by another `next dev`, Next detects it from its lock file and
+   * says so with the PID before this ever runs. What reaches the handler here
+   * is the case Next cannot see: the port held by something that is not a dev
+   * server — an `npm start` left over from a smoke-test run, or an unrelated
+   * app that happens to want 3010.
+   *
+   * The message names PowerShell because this project is developed on Windows:
+   * every setup script here is a `.ps1`, so a POSIX `lsof -i :3010` would be
+   * advice the reader cannot run.
+   */
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code !== "EADDRINUSE") {
+      console.error("\n  Server error:\n", error);
+      process.exit(1);
+    }
+
+    console.error(
+      `\n  Port ${port} is already in use.\n` +
+        `\n  Almost always another Navika server is still running: a previous\n` +
+        `  npm run dev in a terminal you did not close, or an npm start left\n` +
+        `  over from a smoke-test or Lighthouse run.\n` +
+        `\n  Stop whatever holds it (PowerShell):\n` +
+        `    Get-NetTCPConnection -LocalPort ${port} -State Listen |\n` +
+        `      ForEach-Object { taskkill /PID $_.OwningProcess /F }\n` +
+        `\n  Or run this instance on a different port instead:\n` +
+        `    $env:PORT=3011; npm run dev\n`,
+    );
+    process.exit(1);
+  });
+
   server.listen(port, hostname, () => {
     console.log(
       `\n  Navika ready on http://localhost:${port}` +
