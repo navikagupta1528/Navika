@@ -9,7 +9,13 @@ what makes it useful to a parent at 7:40 in the morning.
 
 ## What is built
 
-All five phases are complete and verified.
+Everything below is implemented, wired up and verified. The six phases were
+built in order, then four further areas landed on top of them after the
+roadmap was first met; those are listed under **Beyond the roadmap** rather than
+folded into the phase they relate to.
+
+Current state: **typecheck and lint clean, 309 unit tests, 220 HTTP smoke
+checks across six suites, 36 routes building.**
 
 **Phase 0 - foundation**
 
@@ -59,7 +65,27 @@ All five phases are complete and verified.
 - `render.yaml` blueprint including a managed Postgres
 - `/api/health` for the load balancer, which distinguishes an unreachable
   database from an un-migrated one
-- 156 unit tests and 161 smoke checks across four suites
+
+**Beyond the roadmap** — four areas built after the six phases were met:
+
+- **CSV exports.** Attendance across a date range, per-student history, and a
+  trip manifest. The escaping and the formula-injection guard live in a pure
+  module (`src/lib/csv.ts`, 37 tests) because a spreadsheet that silently
+  evaluates `=cmd(...)` from a student's name is a real problem, not a
+  theoretical one. Ranges are always explicit and capped at 400 days; an invalid
+  range is a 400, never a silent "everything".
+- **Route simulation.** `src/lib/simulator.ts` drives a bus along its own route
+  from a server-side timer, so the live map can be demonstrated without a phone
+  in a car. Pure route maths (40 tests), server-side interval, admin toggle.
+- **Abandoned-trip reconciliation.** A trip left `ONGOING` by a crashed deploy
+  or a dead phone kept its bus looking live and blocked the driver from starting
+  the next run. Liveness is decided by recent activity rather than the status
+  column, in a pure tested module (`src/lib/trip-liveness.ts`, 19 tests).
+- **Route-boundary enforcement.** `/track`, `/fleet`, `/notifications` and
+  `/install` were protected only by each page's own `requireRole`, which throws
+  after React has begun streaming — so an anonymous visitor received a 200
+  carrying the app shell with the redirect arriving later as a meta-refresh tag.
+  The proxy now answers before anything renders, making it a real 307.
 
 ## Stack
 
@@ -172,7 +198,7 @@ npm run db:seed && npm run smoke:tracking
 | ----------------------- | -------------------------------------------------------- |
 | `npm run dev`           | Custom server: Next.js in dev + Socket.IO                |
 | `npm run build`         | Production build                                         |
-| `npm start`             | Custom server in production mode                         |
+| `npm start`             | Custom server in production mode (run `build` first)     |
 | `npm run typecheck`     | `tsc --noEmit`                                           |
 | `npm run lint`          | ESLint                                                   |
 | `npm run test`          | Vitest, pure logic only                                  |
@@ -181,9 +207,12 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:auth`    | Log in as every role, check the dashboards render        |
 | `npm run smoke:admin`   | Admin CRUD and trip lifecycle against a running server   |
 | `npm run smoke:tracking`| Tracking, attendance, alerts, notifications              |
-| `npm run smoke:all`     | All four smoke suites                                    |
+| `npm run smoke:reconcile` | Plant real rows, prove abandoned trips close and live ones don't |
+| `npm run smoke:boundaries` | Every portal page, every role, anonymous and wrong-role  |
+| `npm run smoke:all`     | All six smoke suites                                     |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
+| `npm run check:runtime-tree` | Reject accidental `server-only` imports into client code |
 | `npm run setup:db`      | One-time database provisioning                           |
 | `npm run db:start`      | Start the local database cluster (needed after boot)     |
 | `npm run db:migrate`    | Create and apply a migration in development              |
@@ -197,6 +226,17 @@ npm run db:seed && npm run smoke:tracking
 
 The smoke suites need a running dev server and a live database. Start both, then
 run them.
+
+```
+npm run db:start      # if the machine has just rebooted
+npm run db:seed       # resets to a demo dataset, and restores live trips
+npm start &           # or npm run dev
+npm run smoke:all
+```
+
+`smoke:admin` and `smoke:tracking` write to and clean up after themselves, but
+both expect the seed: `smoke:tracking` in particular needs two `ONGOING` trips
+and will say so plainly rather than failing obscurely if the database is bare.
 
 ## Deploying
 
@@ -262,8 +302,12 @@ prisma/
 scripts/
   setup-db.ps1           one-time database provisioning
   start-db.ps1           start the local cluster after a reboot
-  smoke-*.ts             HTTP suites against a running server
+  smoke-*.ts             six HTTP suites against a running server
+  smoke-reconcile.ts     abandoned-trip reconciliation, on real rows
+  smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
+  check-osrm.ts          is the routing server reachable and sane?
+  check-runtime-tree.ts  reject server-only imports reaching the client
   find-broken-line.mjs   locate the first line that breaks parsing
   lib/http.ts            shared smoke helpers
 server.ts                custom Node server: Next.js + Socket.IO
@@ -276,8 +320,10 @@ src/
       admin/             CRUD, trips, reports, alerts
       driver/            today's trip, checklist, GPS panel
       student/ parent/   dashboards, fleet, track, notifications, install
+      error.tsx loading.tsx not-found.tsx   boundary files
     actions/             Server Actions, thin wrappers over lib cores
     api/health/          load balancer health check
+    api/admin/**/route.ts three guarded CSV export endpoints
   components/
     map/                 MapLibre canvas, route editor, vehicle popups
     tracking/            driver tracker, live map, fleet map
@@ -288,7 +334,9 @@ src/
     db.ts                Prisma singleton with the pg driver adapter
     session.ts           cookie read/write (Next.js side)
     dal.ts               authorization: requireSession, requireRole
+    api-auth.ts          API-side guard, returns 401/403 not a redirect
     queries.ts           scoped read helpers
+    day-window.ts        "today" as one half-open local range, pure
     geo.ts               haversine, bearing, ETA fallback
     osrm.ts              routing client
     osrm-parse.ts        response parsing, no network
@@ -298,46 +346,72 @@ src/
     tracking-queries.ts  scoped tracking reads
     student-scope.ts     the student/guardian relation path, in one place
     attendance.ts        attendance and alert write cores, request-scope-free
+    attendance-summary.ts per-trip aggregation, not per-day, pure
     notifications.ts     notification fan-out
     push.ts              web push with dead-endpoint pruning
+    csv.ts               CSV escaping and formula-injection guard, pure
+    simulator.ts         route movement maths, pure
+    trip-liveness.ts     "is this trip still alive?", pure
+    socket-events.ts     the realtime contract, shared by both sides
+    realtime.ts          browser socket singleton and the arrivals hook
     health.ts            health-check classification, pure
     validations.ts       Zod schemas
+    auth-password.ts     password hashing and verification
     utils.ts             formatting
   server/
     session-core.ts      JWT crypto with no framework dependency
     socket.ts            Socket.IO wiring, rooms, throttling
+    simulator-runner.ts  the interval, the writes, the broadcast
+    trip-reconciler.ts   closes abandoned trips on boot and every 10 min
   proxy.ts               optimistic route redirects (Next 16 renamed middleware)
   generated/prisma/      generated client (git-ignored)
 ```
+
+Modules listed without a note are thin: Prisma calls, socket wiring, or
+formatting. The ones called out as *pure* import nothing from the database, the
+network or the DOM — that constraint is what makes them testable, and it is why
+they use relative sibling imports rather than `@/lib/...`, because Vitest has no
+path-alias configuration here.
 
 ## Testing
 
 Two layers, because they catch different things.
 
-**Unit tests** (`npm run test`, 156 assertions) cover the logic where a bug is
-invisible from the outside: GPS acceptance, ETA parsing, stop ordering,
-freshness decay, and health classification. These modules deliberately import
-nothing from the database, the network or the DOM, which is what makes them
-testable at all - and is why they use relative sibling imports rather than
-`@/lib/...`, because Vitest has no path-alias configuration here.
+**Unit tests** (`npm run test`, 309 assertions over 12 files) cover the logic
+where a bug is invisible from the outside: GPS acceptance, ETA parsing, stop
+ordering, freshness decay, CSV escaping, route-movement maths, trip liveness,
+and health classification. These modules deliberately import nothing from the
+database, the network or the DOM, which is what makes them testable at all — and
+is why they use relative sibling imports rather than `@/lib/...`, because Vitest
+has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 161 checks over four suites) run against a
+**Smoke suites** (`npm run smoke:all`, 220 checks over six suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
-| Suite           | Covers                                                       |
-| --------------- | ------------------------------------------------------------ |
-| `smoke`         | Socket handshake: anonymous refused, valid cookie accepted, forged cookie refused |
-| `smoke:auth`    | Every role can log in and its dashboard renders with data      |
-| `smoke:admin`   | CRUD, referential guards, trip lifecycle, attendance reports  |
-| `smoke:tracking`| Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
+| Suite               | Checks | Covers                                                       |
+| ------------------- | -----: | ------------------------------------------------------------ |
+| `smoke`             |      3 | Socket handshake: anonymous refused, valid cookie accepted, forged cookie refused |
+| `smoke:auth`        |     13 | Every role can log in and its dashboard renders with data      |
+| `smoke:admin`       |     48 | CRUD, referential guards, trip lifecycle, attendance reports  |
+| `smoke:tracking`    |     95 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
+| `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
+| `smoke:boundaries`  |     51 | 28 pages requested anonymously, a 4×4 role matrix, deep links, forged cookies, the API |
 
-The suites find real bugs. `smoke:admin` found five on its first run, and
-`smoke:tracking` found one immediately: `markWaiting` refused to *clear* the
-waiting flag after a pick-up but not to *set* it, so a student could overwrite
-the driver's `PICKED` with `WAITING`, drop the bus's onboard count, and leave
-the "your child is on the bus" notification already sent quietly untrue. The
-guards now apply in both directions.
+The suites find real bugs, which is the entire reason they exist. `smoke:admin`
+found five on its first run, and `smoke:tracking` found one immediately:
+`markWaiting` refused to *clear* the waiting flag after a pick-up but not to *set*
+it, so a student could overwrite the driver's `PICKED` with `WAITING`, drop the
+bus's onboard count, and leave the "your child is on the bus" notification
+already sent quietly untrue. The guards now apply in both directions.
+
+`smoke:boundaries` and `smoke:reconcile` were added later and each caught
+something the unit tests structurally could not. The boundaries suite exists
+because all four missed pages were *passing* every existing check — no data
+leaked — and the failure was only visible in the status code. The reconcile suite
+exists because planting a row eight hours old requires either raw SQL or an
+explicit `createdAt` on insert, and Prisma re-stamps `updatedAt` on every write,
+so a fixture that looks abandoned on inspection is not.
 
 Three limits worth stating plainly:
 
@@ -350,6 +424,10 @@ Three limits worth stating plainly:
   suites check copy and authorization, not layout.
 - Socket broadcast payload shape is covered by the handshake suite but not by a
   full end-to-end delivery assertion.
+- The Docker image has never been built. Docker is not installed on the machine
+  this was developed on, so the base image, the apt packages, the non-root user
+  and the `HEALTHCHECK` are written but unverified. Everything else in this
+  document has been run.
 
 ## Design decisions worth knowing
 
@@ -357,11 +435,21 @@ Three limits worth stating plainly:
 readable by any script on the page. Putting it in an httpOnly, SameSite=Lax
 cookie means an XSS bug cannot exfiltrate a long-lived credential.
 
-**`src/proxy.ts` only redirects; it does not authorize.** It runs before the page
+**`src/proxy.ts` redirects; it does not authorize.** It runs before the page
 renders and costs a JWT verification on every matched request, so it stays cheap.
 Actual authorization lives in `src/lib/dal.ts`, next to every query that depends
-on who is asking. A redirect in the proxy is a UX nicety, not a security
-boundary.
+on who is asking — removing the proxy would not make a single query less safe.
+
+What the proxy genuinely adds is the redirect being a real HTTP 307 with an empty
+body. A `redirect()` thrown from inside a page render happens *after* React has
+begun streaming, so by then the browser already has a 200 with part of the layout,
+and the redirect can only travel back as a `<meta http-equiv="refresh">` tag.
+Deciding it before a byte of React renders is what makes it a redirect rather
+than a flicker.
+
+A prefix absent from that table is a prefix that skips the check entirely, and
+the page's own `requireRole` is the only thing left. **Any new page belongs in
+the table.**
 
 **Server Action write paths are split into request-scope-free cores.**
 `src/lib/attendance.ts` exports functions taking an explicit
@@ -410,7 +498,18 @@ accepted, since there is nothing to compare it against.
 **`Date.now()` is never called during render.** `getFleetPositions()` returns
 `{ asOf, buses }` so the SQL time window and the TypeScript filter that follows
 it agree on a single instant. Computing `now` twice would let a boundary case
-disagree with itself.
+disagree with itself. `dayWindow()` follows the same shape, and reads the clock in
+a default parameter so a process left running overnight does not go on answering
+with yesterday.
+
+**A trip's status column is not proof that a trip is alive.** `ONGOING` is set by
+`startTrip` and cleared by `completeTrip`, and nothing owns the trip in between.
+A dead phone, a discarded tab, a mid-run restart — each leaves the row `ONGOING`
+forever, which keeps its bus looking live, blocks the driver from starting the
+next run, and adds an unfinished run to every report. Liveness is therefore
+decided by recent activity, in a pure module, with the bus ping clamped to the
+trip's own lifetime so that a later trip's ping cannot keep an earlier dead one
+open.
 
 **Opening the notifications inbox marks it read on the server**, in the same
 render, with `newCount` passed through. A client effect would fire a second
