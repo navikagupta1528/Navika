@@ -14,8 +14,9 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 309 unit tests, 220 HTTP smoke
-checks across six suites, 36 routes building.**
+Current state: **typecheck and lint clean, 309 unit tests, 221 HTTP smoke
+checks across six suites, Lighthouse 99 / 100 / 100 / 100 on both public
+pages, 36 routes building.**
 
 **Phase 0 - foundation**
 
@@ -68,8 +69,13 @@ checks across six suites, 36 routes building.**
 - No container image: Render's native Node builder runs the same command
   sequence as a laptop, which is what made this deployable at all
 
-**Beyond the roadmap** — four areas built after the six phases were met:
+**Beyond the roadmap** — five areas built after the six phases were met:
 
+- **Motion and measured performance.** CSS-only entrances, hover lift, press
+  feedback, an active-nav rail, sweeping skeletons and an ambient background on
+  the sign-in screens, plus a Lighthouse run wired into `npm run lighthouse`
+  that fails the build on a regression. The rules the motion follows and the
+  three real defects measuring it uncovered are in **Design decisions** below.
 - **CSV exports.** Attendance across a date range, per-student history, and a
   trip manifest. The escaping and the formula-injection guard live in a pure
   module (`src/lib/csv.ts`, 37 tests) because a spreadsheet that silently
@@ -224,7 +230,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run db:studio`     | Prisma Studio                                            |
 | `npm run db:reset`      | Drop, re-migrate and re-seed                             |
 | `npm run setup`         | All three setup steps in order                           |
-| `npm run lighthouse`    | Score the app and fail on a regression                    |
+| `npm run lighthouse`    | Score both public pages, fail on a regression              |
 
 The smoke suites need a running dev server and a live database. Start both, then
 run them.
@@ -315,7 +321,7 @@ scripts/
   smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
   check-osrm.ts          is the routing server reachable and sane?
-  lighthouse.mjs         score the app, fail on a regression
+  lighthouse.mjs         score both public pages, fail on a regression
   find-broken-line.mjs   locate the first line that breaks parsing
   lib/http.ts            shared smoke helpers
 server.ts                custom Node server: Next.js + Socket.IO
@@ -392,7 +398,7 @@ database, the network or the DOM, which is what makes them testable at all — a
 is why they use relative sibling imports rather than `@/lib/...`, because Vitest
 has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 220 checks over six suites) run against a
+**Smoke suites** (`npm run smoke:all`, 221 checks over six suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
@@ -401,7 +407,7 @@ authorization bugs, and those only appear when a real session meets a real row:
 | `smoke`             |      3 | Socket handshake: anonymous refused, valid cookie accepted, forged cookie refused |
 | `smoke:auth`        |     13 | Every role can log in and its dashboard renders with data      |
 | `smoke:admin`       |     48 | CRUD, referential guards, trip lifecycle, attendance reports  |
-| `smoke:tracking`    |     95 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
+| `smoke:tracking`    |     96 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
 | `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
 | `smoke:boundaries`  |     51 | 28 pages requested anonymously, a 4×4 role matrix, deep links, forged cookies, the API |
 
@@ -432,9 +438,11 @@ Three limits worth stating plainly:
   pages but does not click anything either.
 - Socket broadcast payload shape is covered by the handshake suite but not by a
   full end-to-end delivery assertion.
-- Lighthouse is measured against `/login` on a developer laptop. Mobile emulation
-  applies a 4× CPU slowdown and a slow-4G profile, so a real phone on a real
-  network will differ — in either direction.
+- Lighthouse is measured against `/login` and `/register` on a developer
+  laptop. Mobile emulation applies a 4× CPU slowdown and a slow-4G profile, so
+  a real phone on a real network will differ — in either direction. Authenticated
+  pages are not scored, because a Lighthouse run would have to log in first and
+  the number would then depend on the seed rather than the code.
 
 ## Design decisions worth knowing
 
@@ -508,6 +516,49 @@ it agree on a single instant. Computing `now` twice would let a boundary case
 disagree with itself. `dayWindow()` follows the same shape, and reads the clock in
 a default parameter so a process left running overnight does not go on answering
 with yesterday.
+
+**Only `transform` and `opacity` are ever animated.** Those are the two
+properties a compositor handles without re-running layout or paint. Animating
+`height` or `box-shadow` on an entrance puts main-thread work on every frame of
+every animation, which is exactly what Total Blocking Time measures — and the
+shadow is transitioned rather than animated, so a hover costs one repaint and
+then nothing.
+
+**All motion sits inside `prefers-reduced-motion: no-preference`.** Gating on the
+*absence* of the preference means a visitor who asked for reduced motion gets no
+animation at all, rather than a cancelled one that still paid for the compositor
+work. A bus tracker gets opened in a moving vehicle more often than most apps,
+and that is the audience most likely to have the setting on.
+
+**Entrances never fade from `opacity: 0` on the main content.** LCP is recorded
+when an element first paints, and an element at `opacity: 0` has not painted, so
+a fade pushes the metric out by the length of the fade. `translateY` does not.
+Measured: with the stagger in place LCP is 2248 ms, without it 2210 ms — the 38
+ms is noise. Motion and the performance score turned out to be genuinely
+independent here, and the only way to know that was to take the animation out
+and measure again.
+
+**Pinch-zoom is not disabled.** `maximumScale: 1` was in the viewport export,
+cargo-culted as "app feel". It fails WCAG 1.4.4, and it fails Lighthouse's
+accessibility audit outright: the score read 94 for that reason alone. Zoom is
+the only way to magnify text on a phone.
+
+**The mono font is the system stack.** It was a `next/font` family at the root,
+which meant a 29 KB woff2 **preload on every page** — including sign-in, where
+nothing is monospaced. A preload is high priority by definition, so a font
+nobody on that page could see was competing for bandwidth with the resources
+LCP was actually waiting on. That was most of the LCP improvement. If a real
+mono face is ever wanted, it belongs in the admin layout, not the root one.
+
+**Lighthouse scores `/login` *and* `/register`, not just the first one.** They
+share a layout but not their markup, and `/register` was sitting at 96
+accessibility while `/login` read 100. The cause was the ambient gradient: text
+at `slate-500` measures 3.8:1 where a blob drifts behind it, against a 4.5:1
+floor, so the failure depended on where the animation happened to be mid-sweep.
+Scoring one page would have left it in place indefinitely, because the passing
+page says nothing about the failing one. This is the failure mode decorative
+backgrounds create — text verified once against a flat colour, then silently
+made conditional on animation timing.
 
 **A trip's status column is not proof that a trip is alive.** `ONGOING` is set by
 `startTrip` and cleared by `completeTrip`, and nothing owns the trip in between.
