@@ -81,6 +81,37 @@ export function useSocketConnection(): ConnectionState {
 }
 
 /**
+ * Send a client -> server event on the shared socket.
+ *
+ * Returns false when there is no socket yet, so a caller that fires before the
+ * connection is up can decide whether the event needs to be re-sent later.
+ * Creating the socket here is deliberate: the same page-lifetime singleton, or
+ * a second socket with its own reconnection backoff.
+ */
+export function emitToServer(event: string, payload?: unknown): boolean {
+  if (typeof window === "undefined") return false;
+  const s = getSocket();
+  if (payload === undefined) s.emit(event);
+  else s.emit(event, payload);
+  return s.connected;
+}
+
+/**
+ * Listen for a server event on the shared socket. Returns an unsubscribe
+ * function, so a component that unmounts leaves nothing behind — this is the
+ * imperative counterpart to `useBusLocation` for the driver panel, which needs
+ * `driver:start` and the `server:error` reply rather than a bus subscription.
+ */
+export function listenOnSocket<T>(event: string, handler: (payload: T) => void): () => void {
+  const s = getSocket();
+  const wrapped = (payload: T) => handler(payload);
+  s.on(event, wrapped);
+  return () => {
+    s.off(event, wrapped);
+  };
+}
+
+/**
  * Watch one bus. The callback fires on every position the server broadcasts,
  * which is throttled to at most once every two seconds per driver.
  */

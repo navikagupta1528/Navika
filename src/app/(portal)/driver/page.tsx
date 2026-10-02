@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { getTripPickupSummary } from "@/lib/queries";
 import { Role } from "@/generated/prisma/enums";
 import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { DriverGpsPanel } from "@/components/driver/driver-gps-panel";
+import { EmergencyButton } from "@/components/tracking/emergency-button";
 import {
   Badge,
   Card,
@@ -113,6 +116,8 @@ export default async function DriverDashboard() {
   const nav = [
     { href: "/driver", label: "Today's trip", icon: "🧭", exact: true },
     { href: "/driver/checklist", label: "Pickup checklist", icon: "☑️" },
+    { href: "/notifications", label: "Notifications", icon: "🔔" },
+    { href: "/install", label: "Install on phone", icon: "📲" },
   ];
 
   return (
@@ -122,8 +127,8 @@ export default async function DriverDashboard() {
       nav={nav}
       gpsState={
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
-          Location sharing turns on when you start a trip. Available in
-          Phase&nbsp;3.
+          Parents see your bus only while you are sharing a location. Turn it on
+          with the button on this page.
         </p>
       }
     >
@@ -153,6 +158,16 @@ export default async function DriverDashboard() {
         />
       ) : (
         <div className="space-y-6">
+        <DriverGpsPanel busNumber={shown?.bus.busNumber ?? null} />
+
+        {/* A driver is the person most likely to be looking at this screen when
+            something goes wrong, so the panic button is on their own dashboard
+            rather than buried on the checklist they may not have opened. */}
+        <EmergencyButton
+          busNumber={shown?.bus.busNumber ?? null}
+          showCategory
+        />
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
               label="Bus"
@@ -253,7 +268,13 @@ export default async function DriverDashboard() {
           </Card>
 
           <Card>
-            <CardTitle hint="You will be able to tap each student to mark them picked up from Phase 4">
+            <CardTitle
+              hint={
+                <Link href="/driver/checklist" className="underline">
+                  Open the pickup checklist
+                </Link>
+              }
+            >
               {isFallback ? "Trip schedule" : "Today’s schedule"}
             </CardTitle>
             <dl className="grid gap-3 text-sm sm:grid-cols-3">

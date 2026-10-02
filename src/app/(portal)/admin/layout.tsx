@@ -21,6 +21,11 @@ export const ADMIN_NAV = [
   { href: "/admin/drivers", label: "Drivers", icon: "🧑‍✈️" },
   { href: "/admin/alerts", label: "Alerts", icon: "🚨" },
   { href: "/admin/reports", label: "Reports", icon: "📈" },
+  // Live fleet is shared by every role rather than living under /admin, so it
+  // sits outside ADMIN_NAV: this list is the admin-only sidebar and adding it
+  // here would 403 a parent who followed the link from their dashboard.
+  { href: "/fleet", label: "Live fleet", icon: "📡" },
+  { href: "/notifications", label: "Notifications", icon: "🔔" },
 ];
 
 export default async function AdminLayout({

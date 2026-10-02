@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/dal";
-import { getCurrentUser } from "@/lib/dal";
-import { getStudentAssignment, getTodayTrip } from "@/lib/queries";
+import Link from "next/link";
+import { requireRole, getCurrentUser } from "@/lib/dal";
+import { prisma } from "@/lib/db";
+import { getStudentAssignment } from "@/lib/queries";
 import { Role } from "@/generated/prisma/enums";
 import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { WaitingButton } from "@/components/tracking/waiting-button";
+import { EmergencyButton } from "@/components/tracking/emergency-button";
 import {
   Badge,
   Card,
@@ -23,9 +26,33 @@ export default async function StudentDashboard() {
   const profile = user?.studentProfile;
 
   const assignment = profile ? await getStudentAssignment(profile.id) : null;
-  const trip =
-    assignment && assignment.bus.routeId
-      ? await getTodayTrip(assignment.bus.id, "PICKUP")
+
+  /**
+   * The student's own record on today's trip.
+   *
+   * Looked up through the enrolment rather than the trip, because the student
+   * may have several enrolments (morning and evening) and only the one matching
+   * today's running direction is the one they can be "waiting" for.
+   */
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const liveTrip = assignment
+    ? await prisma.trip.findFirst({
+        where: { busId: assignment.bus.id, date: { gte: today, lt: tomorrow } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, status: true, direction: true },
+      })
+    : null;
+
+  const myRecord =
+    liveTrip && profile
+      ? await prisma.pickupRecord.findFirst({
+          where: { tripId: liveTrip.id, studentId: profile.id },
+          select: { id: true, status: true },
+        })
       : null;
 
   const bus = assignment?.bus;
@@ -51,7 +78,10 @@ export default async function StudentDashboard() {
 
   const nav = [
     { href: "/student", label: "My bus", icon: "🚌", exact: true },
-    { href: "/student/route", label: "Route & stops", icon: "📍" },
+    ...(assignment
+      ? [{ href: `/track/${assignment.bus.id}`, label: "Live tracking", icon: "📡" }]
+      : []),
+    { href: "/notifications", label: "Notifications", icon: "🔔" },
   ];
 
   return (
@@ -63,6 +93,13 @@ export default async function StudentDashboard() {
       <PageHeader
         title={`Hello, ${user?.name?.split(" ")[0] ?? "there"}`}
         description="Your bus, your stop, and when to step out."
+        action={
+          assignment ? (
+            <Link href={`/track/${assignment.bus.id}`} className="btn-primary text-sm">
+              Track my bus live
+            </Link>
+          ) : null
+        }
       />
 
       {!assignment ? (
@@ -106,6 +143,8 @@ export default async function StudentDashboard() {
             />
           </div>
 
+          <EmergencyButton busNumber={bus?.busNumber ?? null} />
+
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardTitle hint="Where the driver starts the pickup run">
@@ -122,25 +161,32 @@ export default async function StudentDashboard() {
                     </Badge>
                   ) : null}
                 </div>
-                <Badge tone={trip?.status === "ONGOING" ? "emerald" : "slate"}>
-                  {trip?.status === "ONGOING"
+                <Badge tone={liveTrip?.status === "ONGOING" ? "emerald" : "slate"}>
+                  {liveTrip?.status === "ONGOING"
                     ? "Trip running"
-                    : trip
-                      ? `Trip ${trip.status.toLowerCase()}`
+                    : liveTrip
+                      ? `Trip ${liveTrip.status.toLowerCase()}`
                       : "No trip today"}
                 </Badge>
               </div>
             </Card>
 
             <Card>
-              <CardTitle hint="You will be able to mark yourself as waiting from Phase 4">
+              <CardTitle hint="Tells the driver to expect you">
                 Waiting status
               </CardTitle>
-              <p className="text-sm text-slate-600">
-                Soon you can tap <span className="font-medium">I&apos;m waiting</span>{" "}
-                when you leave home, and the driver sees the count for your stop
-                immediately.
-              </p>
+              {myRecord ? (
+                <WaitingButton
+                  tripId={liveTrip!.id}
+                  initialStatus={myRecord.status}
+                  tripRunning={liveTrip!.status === "ONGOING"}
+                />
+              ) : (
+                <p className="text-sm text-slate-600">
+                  There is no attendance record for you on today&apos;s trip yet.
+                  The admin creates these when the trip starts.
+                </p>
+              )}
             </Card>
           </div>
 

@@ -179,3 +179,16 @@ body {
     0 8px 16px rgb(15 23 42 / 0.25);
   cursor: grabbing;
 }
+
+/* The "Open details" link inside a vehicle popup. MapLibre popups are
+   injected into the page, so this cannot be a Tailwind class in a component —
+   it has to live in a global stylesheet, scoped tightly enough that it cannot
+   restyle an unrelated popup. */
+.navika-popup-link {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-brand-700, #1d4ed8);
+  text-decoration: underline;
+}

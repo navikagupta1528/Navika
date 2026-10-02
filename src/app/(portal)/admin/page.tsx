@@ -67,7 +67,14 @@ export default async function AdminDashboard() {
         </div>
 
         <Card>
-          <CardTitle hint="Buses that have reported a position recently">
+          <CardTitle
+            hint="Buses that have reported a position recently"
+            action={
+              <Link href="/fleet" className="text-xs text-brand-700 underline">
+                Open the live fleet map
+              </Link>
+            }
+          >
             Fleet positions
           </CardTitle>
 

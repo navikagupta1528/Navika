@@ -36,6 +36,15 @@ export type MapVehicle = {
   /** Degrees clockwise from north. */
   heading?: number | null;
   detail?: string | null;
+  /**
+   * An in-app path to offer as a link in the popup, e.g. `/track/<busId>`.
+   *
+   * The map does not trust this: `map-canvas.tsx` renders it only if it is a
+   * local path, so a value arriving over a socket cannot become a link offsite.
+   * Null means "no link" — the right answer for a viewer who is not allowed to
+   * open that bus's tracking page.
+   */
+  href?: string | null;
 };
 
 /** Marker appearance, so callers do not have to know about CSS class names. */

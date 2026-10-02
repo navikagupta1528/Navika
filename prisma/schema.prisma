@@ -100,6 +100,7 @@ model User {
   resolvedAlerts EmergencyAlert[] @relation("AlertResolvedBy")
 
   notifications Notification[]
+  pushSubscriptions PushSubscription[]
 
   @@index([role])
 }
@@ -437,6 +438,32 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([userId, readAt])
+}
+
+/// A browser's push subscription, so a notification reaches a phone with the
+/// app closed.
+///
+/// One row per browser, not per user: the same person opening Navika on a
+/// tablet and a phone has two endpoints, and unregistering one must not
+/// silence the other. Rows are pruned automatically when the push service
+/// reports an endpoint as gone (see `src/lib/push.ts`), because an expired
+/// endpoint that is never cleaned up is a permanent, invisible send failure.
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The push service's URL for this browser. Unique, because two rows with the
+  /// same endpoint are the same subscription and would double every message.
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Server-side cache of route durations from OSRM so we stay inside the

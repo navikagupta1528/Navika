@@ -444,11 +444,18 @@ export default function MapCanvas({
 
       element.addEventListener("click", (event) => {
         event.stopPropagation();
+        // `localHref` rejects anything that is not a path inside this app, so a
+        // vehicle label or href arriving from a socket payload cannot turn the
+        // popup into a link to somewhere else.
+        const href = vehicle.href ? localHref(vehicle.href) : null;
         popupRef.current
           ?.setLngLat(toLngLat({ lat: vehicle.lat, lng: vehicle.lng }))
           .setHTML(
             `<strong>${escapeHtml(vehicle.label)}</strong>` +
-              (vehicle.detail ? `<br><span>${escapeHtml(vehicle.detail)}</span>` : ""),
+              (vehicle.detail ? `<br><span>${escapeHtml(vehicle.detail)}</span>` : "") +
+              (href
+                ? `<br><a class="navika-popup-link" href="${escapeHtml(href)}">Open details</a>`
+                : ""),
           )
           .addTo(map);
       });
@@ -539,6 +546,21 @@ function nearestOtherStopIndex(stops: MapStop[], exceptId: string, at: LatLng): 
     }
   }
   return best;
+}
+
+/**
+ * Only allow a link that stays inside this app.
+ *
+ * Returns null for anything absolute, protocol-relative, or carrying a scheme.
+ * A vehicle's `href` originates from a socket payload, and a popup is built as
+ * an HTML string — so without this check a crafted value could render
+ * `<a href="javascript:…">` or point a parent at a look-alike domain, and an
+ * escaping pass alone would not help, because those are valid hrefs.
+ */
+function localHref(value: string): string | null {
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  if (value.includes("\\") || /[\s"'<>]/.test(value)) return null;
+  return value;
 }
 
 /** Popups are built as HTML, so every interpolated value is escaped. */

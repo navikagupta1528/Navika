@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Navika — Project One-Pager</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:   #0B1220;
+    --body:  #1E293B;
+    --slate: #475569;
+    --muted: #64748B;
+    --line:  #E2E8F0;
+    --line2: #CBD5E1;
+    --wash:  #F8FAFC;
+    --green: #059669;
+    --green2:#10B981;
+    --indigo:#4F46E5;
+    --red:   #B91C1C;
+  }
+
+  html, body { width: 210mm; height: 297mm; }
+
+  body {
+    font-family: "Segoe UI", -apple-system, "Inter", system-ui, sans-serif;
+    font-size: 6.6pt;
+    line-height: 1.3;
+    color: var(--body);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff;
+  }
+
+  .page {
+    width: 210mm; height: 297mm;
+    padding: 7mm 7.5mm 5mm 7.5mm;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------------- header ---------------- */
+  header {
+    background: linear-gradient(120deg, #0B1220 0%, #16243C 52%, #0F3A33 100%);
+    color: #fff; border-radius: 5px;
+    padding: 6px 10px 7px 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo { font-size: 19pt; font-weight: 800; letter-spacing: -0.6px; line-height: 1; }
+  .logo span { color: var(--green2); }
+  .tagline { font-size: 7.6pt; font-weight: 600; color: #E2E8F0; margin-top: 2.5px; line-height: 1.22; }
+  .tagline em { color: var(--green2); font-style: normal; }
+  .sub { font-size: 6.2pt; color: #94A3B8; margin-top: 2px; }
+  .htags {
+    margin-left: auto; text-align: right;
+    font-size: 5.9pt; color: #CBD5E1; line-height: 1.5; white-space: nowrap;
+  }
+  .htags b { color: #fff; font-weight: 600; }
+
+  /* ---------------- stats ---------------- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 5px; }
+  .stat {
+    border: 1px solid var(--line); border-left: 2.2px solid var(--green);
+    border-radius: 3px; padding: 3.5px 5px; background: var(--wash);
+  }
+  .stat .n { font-size: 11.5pt; font-weight: 800; color: var(--ink); line-height: 1; letter-spacing: -0.5px; }
+  .stat .n i { font-size: 6.2pt; font-weight: 600; font-style: normal; color: var(--muted); }
+  .stat .l { font-size: 5.7pt; color: var(--slate); margin-top: 1.5px; line-height: 1.28; }
+
+  /* ---------------- macro columns ---------------- */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; flex: 1; min-height: 0; align-items: start; }
+  .col { min-width: 0; }
+
+  .sec { margin-bottom: 6px; }
+  .sech { display: flex; align-items: center; gap: 4px; margin-bottom: 2.5px; }
+  .sech .num {
+    font-size: 5.4pt; font-weight: 800; color: #fff; background: var(--indigo);
+    border-radius: 2px; padding: 1px 3px; letter-spacing: 0.3px;
+  }
+  .sech h2 { font-size: 7.4pt; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.4px; }
+  .sech .rule { flex: 1; height: 1px; background: var(--line); }
+  .sech .note { font-size: 5.6pt; color: var(--muted); font-weight: 600; }
+
+  /* ---------------- problem ---------------- */
+  .quote { font-size: 8.4pt; font-weight: 700; color: var(--ink); line-height: 1.26; letter-spacing: -0.2px; }
+  .quote u { text-decoration: none; color: var(--indigo); }
+  .subq { font-size: 6.3pt; color: var(--slate); margin: 2.5px 0 4px; line-height: 1.34; }
+  .blind {
+    display: flex; gap: 4px; border-left: 2px solid var(--line2);
+    padding: 0 0 0 5px; margin-bottom: 3.5px;
+  }
+  .blind .k { flex: 0 0 auto; font-size: 5.6pt; font-weight: 800; color: var(--red); width: 8px; }
+  .blind h4 { font-size: 6.4pt; font-weight: 700; color: var(--ink); }
+  .blind p { font-size: 6pt; color: var(--slate); line-height: 1.3; }
+
+  /* ---------------- roles ---------------- */
+  .role {
+    display: flex; gap: 4px; border: 1px solid var(--line);
+    border-left: 2.2px solid var(--indigo); border-radius: 3px;
+    padding: 3px 5px; margin-bottom: 3px; background: #fff;
+  }
+  .role.r2 { border-left-color: var(--green); }
+  .role.r3 { border-left-color: #B45309; }
+  .role.r4 { border-left-color: var(--slate); }
+  .role .ic { flex: 0 0 13px; font-size: 8pt; text-align: center; line-height: 1.1; }
+  .role h3 { font-size: 6.6pt; font-weight: 700; color: var(--ink); display: inline; }
+  .role .who { font-size: 5.5pt; color: var(--muted); margin-left: 3px; }
+  .role p { font-size: 5.95pt; color: var(--slate); line-height: 1.3; margin-top: 1px; }
+
+  /* ---------------- phase bars ---------------- */
+  .phase { margin-bottom: 2.5px; }
+  .phase .pt { display: flex; align-items: baseline; gap: 3px; font-size: 6pt; margin-bottom: 1px; }
+  .phase .pt b { color: var(--ink); font-weight: 700; white-space: nowrap; }
+  .phase .pt .d { color: var(--muted); font-size: 5.5pt; flex: 1; line-height: 1.2; }
+  .phase .pt .v { font-weight: 800; font-size: 5.9pt; white-space: nowrap; }
+  .bar { height: 3.2px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 2px; }
+  .done i { background: linear-gradient(90deg, var(--green), var(--green2)); }
+  .wip i  { background: linear-gradient(90deg, var(--indigo), #818CF8); }
+  .todo i { background: var(--line2); }
+  .done .v { color: var(--green); } .wip .v { color: var(--indigo); } .todo .v { color: var(--muted); }
+  .flag { font-size: 5.1pt; font-weight: 700; border-radius: 2px; padding: 0.5px 2.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .flag.d { background: #D1FAE5; color: #065F46; }
+  .flag.w { background: #E0E7FF; color: #3730A3; }
+  .flag.t { background: var(--line); color: var(--slate); }
+
+  /* ---------------- tables ---------------- */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-size: 5.5pt; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    text-align: left; font-weight: 700; border-bottom: 1px solid var(--line2); padding: 0 3px 1.5px 0;
+  }
+  td { font-size: 5.9pt; color: var(--body); padding: 1.8px 3px 1.8px 0; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.27; }
+  tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 700; color: var(--ink); }
+  td.p { color: var(--green); font-weight: 700; }
+  td.m { color: var(--slate); }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 5.6pt; color: #0F766E; }
+
+  .note-box {
+    background: var(--wash); border: 1px solid var(--line); border-radius: 3px;
+    padding: 3.5px 5px; font-size: 5.9pt; color: var(--slate); line-height: 1.34; margin-top: 3px;
+  }
+  .note-box b { color: var(--ink); }
+
+  /* ---------------- market cards ---------------- */
+  .mkt { border: 1px solid var(--line); border-radius: 3px; padding: 3px 5px; margin-bottom: 3px; }
+  .mkt h4 { font-size: 6.3pt; font-weight: 700; color: var(--ink); }
+  .mkt .pl { font-size: 5.7pt; color: var(--green); font-weight: 700; margin: 1px 0 1.5px; }
+  .mkt p { font-size: 5.85pt; color: var(--slate); line-height: 1.3; }
+  .mkt p b { color: var(--ink); }
+
+  /* ---------------- differentiation ---------------- */
+  .d-item { display: flex; gap: 4px; margin-bottom: 3px; }
+  .d-item .k {
+    flex: 0 0 auto; font-size: 5.3pt; font-weight: 800; color: #fff; background: var(--green);
+    border-radius: 2px; width: 10px; height: 10px; text-align: center; line-height: 10px; margin-top: 0.5px;
+  }
+  .d-item h4 { font-size: 6.3pt; font-weight: 700; color: var(--ink); }
+  .d-item p { font-size: 5.9pt; color: var(--slate); line-height: 1.3; margin-top: 0.5px; }
+
+  /* ---------------- gaps ---------------- */
+  .gaps { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 3px; padding: 3.5px 5px; }
+  .gaps p { font-size: 5.9pt; color: #78350F; line-height: 1.36; }
+  .gaps b { font-weight: 700; }
+  .deploy { background: var(--wash); border: 1px solid var(--line); border-left: 2.2px solid var(--indigo); border-radius: 3px; padding: 3.5px 5px; font-size: 5.9pt; color: var(--slate); line-height: 1.34; margin-top: 3px; }
+  .deploy b { color: var(--ink); }
+
+  footer {
+    margin-top: 5px; padding-top: 4px; border-top: 1px solid var(--line2);
+    display: flex; justify-content: space-between; font-size: 5.6pt; color: var(--muted);
+  }
+  footer b { color: var(--slate); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ======================= HEADER ======================= -->
+  <header>
+    <div>
+      <div class="logo">NAVI<span>KA</span></div>
+      <div class="tagline">Student-aware school &amp; college bus tracking — <em>for India, on a phone, with zero hardware.</em></div>
+      <div class="sub">Solo-built full-stack product · a dot on a map is not an answer — a child on a bus is</div>
+    </div>
+    <div class="htags">
+      <b>Next.js 16</b> · <b>React 19</b> · <b>TypeScript 5</b> · <b>Tailwind v4</b><br />
+      <b>Prisma 7</b> · <b>PostgreSQL 17</b> · <b>Socket.IO 4.8</b> · <b>jose</b><br />
+      <b>MapLibre GL 6</b> · <b>OSRM</b> · <b>Web Push</b> · <b>Zod v4</b> · <b>Vitest 5</b>
+    </div>
+  </header>
+
+  <!-- ======================= STATS ======================= -->
+  <div class="stats">
+    <div class="stat"><div class="n">83<i>%</i></div><div class="l">of the 6-phase roadmap is built and running. Phases 0–4 shipped, Phase 5 started</div></div>
+    <div class="stat"><div class="n">147<i>/147</i></div><div class="l">unit tests passing; typecheck and ESLint clean. GPS and ETA maths is tested, not eyeballed</div></div>
+    <div class="stat"><div class="n">18</div><div class="l">database models with real foreign keys — no orphans, no <code>relationMode</code> escape hatch</div></div>
+    <div class="stat"><div class="n">₹0</div><div class="l">hardware cost per bus. The driver's phone is the tracker — no black box, no RFID cards</div></div>
+  </div>
+
+  <!-- ======================= TWO COLUMNS ======================= -->
+  <div class="cols">
+    <div class="col">
+
+      <!-- 01 -->
+      <div class="sec">
+        <div class="sech"><span class="num">01</span><h2>Kis Cheez Ke Liye — The Problem</h2><span class="rule"></span></div>
+        <div class="quote">At 7:40 in the morning a parent does not ask <u>"where is the bus?"</u> They ask <u>"is my child on it?"</u></div>
+        <div class="subq">Navika closes the gap between <b>where a vehicle is</b> and <b>what happened to a person</b> — which student is on which bus, which stop they board at, whether they have stepped out of the house yet, and whether they actually got picked up.</div>
+        <div class="blind"><div class="k">1</div><div><h4>The hardware gate</h4><p>An affordable Indian school buys a ₹3,000–8,000 GPS black box per bus, RFID cards, a SIM and an annual contract — and still receives a dot on a map. Cost scales per vehicle, so small colleges are priced out entirely.</p></div></div>
+        <div class="blind"><div class="k">2</div><div><h4>Nobody closes the loop</h4><p>The bus arrives, the driver is late, the child is left standing. No product makes the parent and the driver <b>agree on what happened</b>. The map is a one-way broadcast with no confirmation channel.</p></div></div>
+        <div class="blind"><div class="k">3</div><div><h4>Identity is lost</h4><p>A bus is tracked, a child is not. "Bus 12 is on time" never becomes "Aarav got home", and attendance becomes a register the driver ticks from memory after the route ends.</p></div></div>
+      </div>
+
+      <!-- 02 -->
+      <div class="sec">
+        <div class="sech"><span class="num">02</span><h2>Isko Kaun Use Karega</h2><span class="rule"></span><span class="note">4 roles, role-gated at the query layer</span></div>
+        <div class="role"><div class="ic">👩</div><div><h3>Parent / Guardian</h3><span class="who">primary user · daily</span><p>Live map of their child's bus, road-following ETA to <b>their</b> stop, one-tap "I'm waiting", pick-up and drop confirmations, web push when the app is closed. The reason the product exists.</p></div></div>
+        <div class="role r2"><div class="ic">🎒</div><div><h3>Student</h3><span class="who">ages 6–18</span><p>Own bus and ETA, their own waiting signal, a personal attendance history. The waiting button is the one action a child can genuinely take for themselves.</p></div></div>
+        <div class="role r3"><div class="ic">🚌</div><div><h3>Driver / Conductor</h3><span class="who">field user · hours per trip</span><p>Installable phone PWA using <code>watchPosition</code>, a live pick-up checklist showing who is waiting at the next stop, one-tap picked / missed. Built for a cheap Android, not a desktop.</p></div></div>
+        <div class="role r4"><div class="ic">🏫</div><div><h3>Admin / Transport Operator</h3><span class="who">the paying buyer</span><p>Stops, routes, buses, drivers, enrolments, trip scheduling, a live fleet map, emergency alerts and a 30-day attendance report — the whole operation in one portal.</p></div></div>
+      </div>
+
+      <!-- 03 -->
+      <div class="sec">
+        <div class="sech"><span class="num">03</span><h2>Kitna Kaam Hua</h2><span class="rule"></span><span class="note">Phases 0–2 committed · 3–4 in tree</span></div>
+        <div class="phase done"><div class="pt"><b>Phase 0 — Foundation</b><span class="d">18-model schema, session auth, 4 role dashboards, Socket.IO</span><span class="flag d">Done</span><span class="v">100%</span></div><div class="bar"><i style="width:100%"></i></div></div>
+        <div class="phase done"><div class="pt"><b>Phase 1 — Admin CRUD</b><span class="d">Stops, routes, buses, drivers, enrolments, trips, attendance</span><span class="flag d">Done</span><span class="v">100%</span></div><div class="bar"><i style="width:100%"></i></div></div>
+        <div class="phase done"><div class="pt"><b>Phase 2 — Live Maps</b><span class="d">MapLibre canvas, route polyline, stop markers, OSRM ETA</span><span class="flag d">Done</span><span class="v">100%</span></div><div class="bar"><i style="width:100%"></i></div></div>
+        <div class="phase wip"><div class="pt"><b>Phase 3 — Driver PWA</b><span class="d">GPS fix validation, driver panel, installable service worker</span><span class="flag w">WIP</span><span class="v">90%</span></div><div class="bar"><i style="width:90%"></i></div></div>
+        <div class="phase wip"><div class="pt"><b>Phase 4 — Waiting Sync</b><span class="d">"I'm waiting", driver check-off, notifications, web push</span><span class="flag w">WIP</span><span class="v">90%</span></div><div class="bar"><i style="width:90%"></i></div></div>
+        <div class="phase todo"><div class="pt"><b>Phase 5 — Ship It</b><span class="d">CSV export, offline queue, PWA polish, staging deploy</span><span class="flag t">Todo</span><span class="v">20%</span></div><div class="bar"><i style="width:20%"></i></div></div>
+        <div class="note-box">
+          <b>Precisely what is unfinished.</b> The <code>isSimulated</code> flag exists and two live trips are seeded, but there is no driver-facing simulator screen — needed to demo and test without draining a phone. Pick-up records are written and a 30-day report renders, but linking every enrolled student to a trip without the driver opening the checklist is not done.
+        </div>
+        <div class="note-box">
+          <b>How the build stays honest.</b> <code>npm run verify</code> chains typecheck, ESLint, 147 Vitest cases and a production build, so a broken commit cannot land. Three smoke suites guard the realtime layer: <code>smoke</code> refuses an anonymous socket and a forged cookie, <code>smoke:auth</code> logs in as all four demo roles, <code>smoke:admin</code> walks the admin surfaces.
+        </div>
+      </div>
+
+      <!-- 04 -->
+      <div class="sec">
+        <div class="sech"><span class="num">04</span><h2>Hum Kaise Alag Hain</h2><span class="rule"></span><span class="note">Already in the code, not promised</span></div>
+        <div class="d-item"><div class="k">1</div><div><h4>Zero hardware — the phone is the tracker</h4><p>No black box, no RFID, no SIM, no installer on campus. Per-bus cost is ₹0, so a 20-bus college onboards in a day, not a quarter. This is the single biggest reason incumbents cannot reach Navika's segment.</p></div></div>
+        <div class="d-item"><div class="k">2</div><div><h4>The child is the entity, not the bus</h4><p>Student → bus → stop → route → trip, and alerts resolve through <code>ParentChild</code> to that specific child's guardians. "Bus 12 is on time" becomes "Aarav got home." Fleet tools structurally cannot do this.</p></div></div>
+        <div class="d-item"><div class="k">3</div><div><h4>The loop actually closes</h4><p>Parent presses "I'm waiting" → the driver's checklist shows "3 waiting" before he arrives → he marks picked or missed. That two-way handshake is the proof a map can never give, and it is built end to end.</p></div></div>
+        <div class="d-item"><div class="k">4</div><div><h4>GPS is treated as untrusted input</h4><p>Accuracy ceiling, clock-skew window, a 160 km/h teleport guard and a freshness tone so a dead signal never looks like a parked bus. Most trackers draw the glitch and lose the parent's trust in week one.</p></div></div>
+        <div class="d-item"><div class="k">5</div><div><h4>Free maps and free ETA at school scale</h4><p>MapLibre + OpenStreetMap, OSRM with a haversine fallback. Vendors hide a per-seat Google bill in the annual quote; here the marginal cost of one more student is zero.</p></div></div>
+        <div class="d-item"><div class="k">6</div><div><h4>Operationally complete, not a demo</h4><p>Admin CRUD, trip scheduling, live fleet map, emergency alerts and a 30-day attendance report ship alongside the tracking, on a ₹0–2k/month Node host. One persistent server is the price of live tracking, and it is a cheap one.</p></div></div>
+      </div>
+
+    </div>
+
+    <div class="col">
+
+      <!-- 05 -->
+      <div class="sec">
+        <div class="sech"><span class="num">05</span><h2>Tech Stack — Aur Kyun Wo Wala</h2><span class="rule"></span></div>
+        <table>
+          <tr><th style="width:23%">Layer</th><th>Choice, and the reason</th></tr>
+          <tr><td class="k">Framework</td><td class="m">Next.js 16.3 App Router, React 19, Turbopack — Server Components for data-heavy dashboards, one deploy target instead of a separate API app</td></tr>
+          <tr><td class="k">Database</td><td class="m">PostgreSQL 17 + Prisma 7.10 via the <code>pg</code> adapter, 18 models — real foreign keys and transactions; Prisma's <code>relationMode="prisma"</code> quietly abandons integrity on Postgres</td></tr>
+          <tr><td class="k">Auth</td><td class="m"><code>jose</code> JWT in an httpOnly, SameSite=Lax cookie — nothing in <code>localStorage</code> for an XSS bug to steal. Registration can only ever create STUDENT or PARENT</td></tr>
+          <tr><td class="k">Authorization</td><td class="m">A DAL beside every query — <code>proxy.ts</code> only redirects for UX. A redirect is a nicety, not a security boundary</td></tr>
+          <tr><td class="k">Realtime</td><td class="m">Socket.IO 4.8 on a custom Node server with per-bus rooms — the handshake reuses the session cookie, so there is no second token. Broadcast every ping, persist at most every 15 s</td></tr>
+          <tr><td class="k">Maps</td><td class="m">MapLibre GL 6 + OpenStreetMap — no API key, no per-seat bill, no Google lock-in</td></tr>
+          <tr><td class="k">ETA</td><td class="m">OSRM road-following API with a haversine fallback — accurate when the service is up, degrades to straight-line rather than failing</td></tr>
+          <tr><td class="k">GPS trust</td><td class="m">Accuracy ceiling, clock-skew window, 160 km/h teleport guard — a phone in a basement reports 2 km accuracy and a tunnel re-acquisition implies 300 km/h; drawing that glitch teleports a bus across a parent's screen</td></tr>
+          <tr><td class="k">PWA</td><td class="m">Service worker + web-push with VAPID — keys are optional, so the core still runs with no push service, losing only lock-screen alerts</td></tr>
+          <tr><td class="k">Validation</td><td class="m">Zod v4 — one schema imported by both the form and the Server Action, so the client is never trusted to match the server</td></tr>
+          <tr><td class="k">Testing</td><td class="m">Vitest 5, 147 cases — every decision about a position report is a pure function, so the hard cases are unit-tested rather than demoed</td></tr>
+          <tr><td class="k">Seed data</td><td class="m">3 routes, 12 stops, 5 buses, 6 drivers, 40 students, 8 parents, two live trips — a believable dataset, so a reviewer sees a product, not an empty shell</td></tr>
+          <tr><td class="k">Hosting</td><td class="m">A Node host — Render, Railway, Fly or a ₹500 VPS. Deliberately not Vercel: Socket.IO needs a persistent connection that serverless will not hold</td></tr>
+        </table>
+      </div>
+
+      <!-- 06 -->
+      <div class="sec">
+        <div class="sech"><span class="num">06</span><h2>Kya Aisa Already Bana Hai?</h2><span class="rule"></span><span class="note">Yes — crowded market</span></div>
+        <div class="mkt">
+          <h4>India — hardware suites</h4>
+          <div class="pl">Tracko · Campus Go · BusTrak · myskoolbus · ParentsEye · TrackYatra</div>
+          <p>GPS black box + RFID card attendance + parent app, sold as an annual per-vehicle or per-student contract. <b>The gap:</b> a one-way broadcast. No waiting signal, no confirmed pick-up, and the per-vehicle cost locks small colleges out.</p>
+        </div>
+        <div class="mkt">
+          <h4>India — light / parent-only apps</h4>
+          <div class="pl">Kidobus · bustrackr · schoolites</div>
+          <p>Live map, push alerts, stop-level ETA, often free to the school to drive adoption. <b>The gap:</b> a map with a bell on it — no attendance proof, no route administration, no emergency handling for the operator.</p>
+        </div>
+        <div class="mkt">
+          <h4>US / Canada — district platforms</h4>
+          <div class="pl">TrackSchoolBus · VeriTrans · BusBoss · Transfinder · Busology</div>
+          <p>AVL telemetry, route optimisation, district compliance reporting, RFID rider tracking. <b>The gap:</b> built for a district with a procurement department, not one college in one city. Six-figure contracts.</p>
+        </div>
+        <div class="mkt">
+          <h4>Generic fleet tooling</h4>
+          <div class="pl">Google Fleet · Maps · standalone GPS trackers</div>
+          <p>Vehicle position, telematics, route history, engine diagnostics. <b>The gap:</b> no child identity, no stop, no parent. A fleet tool answers "where is asset 12" and never "is Aarav on it".</p>
+        </div>
+      </div>
+
+      <!-- 07 -->
+      <div class="sec">
+        <div class="sech"><span class="num">07</span><h2>Honestly, Kya Baki Hai</h2><span class="rule"></span></div>
+        <div class="gaps">
+          <p><b>Not built yet, and it matters:</b> CSV / Excel export of attendance and reports · an offline-first queue so a driver in a dead zone does not lose pick-ups · the driver-facing simulator · invite-vetted parent self-signup instead of open registration · billing and per-school tenancy · a hardware fallback for buses where no driver carries a phone · offline map tiles for poor-network corridors.</p>
+        </div>
+        <div class="deploy">
+          <b>Why not Vercel.</b> Socket.IO needs one long-lived connection to fan positions out to watching parents, and serverless functions are torn down between requests. Navika therefore runs on a persistent Node host behind a custom <code>server.ts</code> that hands the handshake to engine.io before Next.js sees the request.
+        </div>
+      </div>
+
+      <!-- 08 -->
+      <div class="sec">
+        <div class="sech"><span class="num">08</span><h2>Agle 90 Din — The Plan</h2><span class="rule"></span></div>
+        <table>
+          <tr>
+            <td class="k" style="width:15%">Next 30 days</td>
+            <td class="m">Close Phase 5. CSV / Excel export of attendance and reports, an offline-first queue so a driver in a dead zone does not lose pick-ups, the driver-facing simulator, and a staging deploy to a Railway or Render Node host with real VAPID keys so push is live rather than optional.</td>
+          </tr>
+          <tr>
+            <td class="k" style="width:15%">Days 30–60</td>
+            <td class="m">Make it sellable. Invite-vetted parent self-signup instead of open registration, per-school tenancy and billing, offline map tiles for poor-network corridors, and onboarding documentation aimed at one school operator rather than a developer.</td>
+          </tr>
+          <tr>
+            <td class="k" style="width:15%">Days 60–90</td>
+            <td class="m">Prove the metric. Three real school pilots live, with "was the pick-up confirmed" as the north-star number instead of daily actives. That result decides whether the defensible moat is the zero-hardware cost or the attendance history that accumulates on top of it.</td>
+          </tr>
+        </table>
+        <div class="note-box">
+          <b>How to see it working today.</b> <code>npm run dev</code> serves the app on <code>localhost:3000</code> with Socket.IO attached. Seeded demo logins, all with the password <code>navika123</code>: <code>admin@navika.test</code>, <code>driver1@navika.test</code>, <code>parent1@navika.test</code> and <code>aarav.sharma0@student.navika.test</code> — one of each role, so the four dashboards can be compared side by side.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    <span><b>Navika</b> — student-aware smart school &amp; college bus management and tracking</span>
+    <span>Status: <b>83% of roadmap</b> · 147/147 tests · typecheck + lint clean · 30 Sep 2026</span>
+  </footer>
+
+</div>
+</body>
+</html>
