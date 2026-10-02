@@ -90,7 +90,30 @@ export default async function ReportsPage({
             >
               Last 30 days
             </Link>
+            {/*
+              The download carries the same range the report was run with, and
+              only appears when that range is valid. A link that silently exported
+              the default 30 days while the table above showed something else
+              would be the worst version of this bug: the sheet would be
+              individually correct and inconsistent with the screen it came from.
+            */}
+            {!invalid && from <= to ? (
+              <a
+                href={`/api/admin/reports/attendance.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`}
+                className="btn-secondary ml-auto"
+                download
+              >
+                Download CSV
+              </a>
+            ) : null}
           </form>
+          {!invalid && from <= to ? (
+            <p className="mt-3 text-xs text-slate-500">
+              One row per attendance record, so a spreadsheet can build its own
+              totals. The numbers on this page are aggregates of exactly these
+              rows.
+            </p>
+          ) : null}
         </Card>
 
         {invalid || !report ? (
@@ -221,11 +244,17 @@ export default async function ReportsPage({
                       <Cell className="text-slate-600">{c.busNumber}</Cell>
                       <Cell className="tabular-nums font-medium text-red-600">{c.missed}</Cell>
                       <Cell className="text-right">
+                        {/*
+                          Links to that child's history, not to a search for their
+                          roll number. Whoever reads this table has a name in front
+                          of them and wants this child's record; sending them back
+                          to a search box to re-find it is a step with no purpose.
+                        */}
                         <Link
-                          href={`/admin/students?q=${encodeURIComponent(c.enrollmentNo)}`}
+                          href={`/admin/students/${c.studentId}`}
                           className="btn-ghost px-2 py-1 text-xs"
                         >
-                          View
+                          History
                         </Link>
                       </Cell>
                     </Row>

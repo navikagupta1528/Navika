@@ -274,6 +274,19 @@ export default async function StudentsPage({
                       </td>
                       <td className="py-2.5 text-right">
                         <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                          {/*
+                            The name is the link to the detail page, not a separate
+                            button. Two adjacent buttons that do different things
+                            ("Open" vs "Edit assignment") is one click too many for
+                            the most common action on this screen.
+                          */}
+                          <Link
+                            href={`/admin/students/${student.id}`}
+                            className="text-xs text-slate-500 underline-offset-2 hover:text-brand-700 hover:underline"
+                            title="Attendance history"
+                          >
+                            History
+                          </Link>
                           <Link
                             href={`/admin/students?edit=${student.id}`}
                             className="btn-ghost px-2 py-1 text-xs"

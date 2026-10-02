@@ -73,9 +73,26 @@ export default async function TripDetailPage({
         title={`${trip.bus.busNumber} · ${trip.direction === "PICKUP" ? "Home to college" : "College to home"}`}
         description={`${formatDate(trip.date)} · planned ${formatTime(trip.scheduledStart)} · ${trip.bus.route?.name ?? "no route"}`}
         action={
-          <Link href="/admin/trips" className="btn-secondary">
-            Back to trips
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {/*
+              The printable manifest, not the same table as the screen below. It
+              carries the phone numbers and is ordered by boarding position,
+              because the thing being produced here is a sheet a driver carries -
+              paper has no sort control and no scrollbar.
+            */}
+            {expectedCount > 0 ? (
+              <a
+                href={`/api/admin/trips/${trip.id}/manifest.csv`}
+                className="btn-secondary"
+                download
+              >
+                Download manifest
+              </a>
+            ) : null}
+            <Link href="/admin/trips" className="btn-ghost">
+              Back to trips
+            </Link>
+          </div>
         }
       />
 
