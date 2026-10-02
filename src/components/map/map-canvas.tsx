@@ -4,6 +4,7 @@ import {
   Map as MapLibreMap,
   Marker,
   Popup,
+  setWorkerUrl,
   type GeoJSONSource,
   type StyleSpecification,
 } from "maplibre-gl";
@@ -40,6 +41,55 @@ import { DEFAULT_VIEWPORT, type MapStop, type RouteMapProps } from "./map-types"
 const SOURCE_ID = "navika-route";
 const LINE_LAYER_ID = "navika-route-line";
 const LINE_CASING_LAYER_ID = "navika-route-line-casing";
+
+/*
+ * Point MapLibre at the worker the bundler actually emitted.
+ *
+ * MapLibre finds its worker with this:
+ *
+ *   function workerUrl() {
+ *     const self = import.meta.url;
+ *     if (!/^https?:/.test(self)) return "";
+ *     const file = self.endsWith("-dev.mjs") ? "maplibre-gl-worker-dev.mjs"
+ *                                          : "maplibre-gl-worker.mjs";
+ *     return new URL(`./${file}`, self).href;
+ *   }
+ *
+ * That computes `./maplibre-gl-worker.mjs` relative to *this module's* URL. The
+ * assumption is that a library and its worker are siblings on the same server
+ * path, which is true when the two are copied out of a package directory
+ * together and false the moment a bundler is involved.
+ *
+ * Under Turbopack they are not siblings. The bundler does read that
+ * `new URL(...)` call and does emit the file — it lands in
+ * `/_next/static/media/maplibre-gl-worker.<hash>.mjs`, with a content hash and
+ * no relation to the chunk's own directory. The runtime string concatenation
+ * above resolves to `/_next/static/chunks/maplibre-gl-worker.mjs`, which is not
+ * that file. So the worker 404s and the console reports, accurately but
+ * uselessly:
+ *
+ *   Worker failed to load. Check that the worker URL is correct.
+ *
+ * Nothing else tells you the URL was derived from a chunk path rather than
+ * configured, which is why this reads as a MapLibre problem instead of a
+ * bundler one.
+ *
+ * `setWorkerUrl` is MapLibre's own override for exactly this, and it is checked
+ * before the derivation above, so naming the asset ourselves is using the
+ * supported path rather than patching around it. Written as a bare module
+ * request inside `new URL(...)` so Turbopack statically rewrites it to the same
+ * hashed file it already emits, and so a MapLibre upgrade moves this reference
+ * on its own.
+ *
+ * Safe at module scope: `RouteMap` reaches this file through
+ * `next/dynamic({ ssr: false })` and nothing else imports it, so this never
+ * runs on the server where `import.meta.url` would be a filesystem path.
+ *
+ * Without a worker, MapLibre does not draw tiles at all — the map renders as an
+ * empty canvas with no error on screen, which is the worst possible failure for
+ * the main screen of a tracking product.
+ */
+setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).href);
 
 /**
  * OpenStreetMap raster tiles, as an inline style.
@@ -179,6 +229,32 @@ export default function MapCanvas({
     const straight = orderedStops.map((s) => ({ lat: s.lat, lng: s.lng }));
     return straight.length >= 2 ? straight : [];
   }, [geometry, orderedStops]);
+
+  /**
+   * The latest route data, for the marker handlers to read.
+   *
+   * Markers are keyed by id and live for as long as the map does, so their
+   * listeners are attached exactly once — on the render that created them. A
+   * listener that closed over that render's `stop` would keep answering with
+   * the name, detail and position the stop had when the map first drew, and
+   * `dragend` would reorder against a stale array. Reordering and renaming are
+   * ordinary admin actions, so "stale once the data changes" is the normal
+   * case here, not an edge case.
+   *
+   * The callbacks above already needed this treatment for a different reason
+   * (an inline arrow would remount every marker); these needed it because the
+   * values change. Both end up read at event time, never captured.
+   *
+   * Declared before the marker effects, so the sync below always runs first.
+   */
+  const stopsRef = useRef(orderedStops);
+  const vehiclesRef = useRef(usableVehicles);
+  const lineRef = useRef(line);
+  useEffect(() => {
+    stopsRef.current = orderedStops;
+    vehiclesRef.current = usableVehicles;
+    lineRef.current = line;
+  });
 
   // --- Map creation -------------------------------------------------------
 
@@ -354,24 +430,57 @@ export default function MapCanvas({
         if (draggingRef.current !== stop.id) {
           existing.setLngLat(toLngLat({ lat: stop.lat, lng: stop.lng }));
         }
-        existing.getElement().className = element.className;
-        existing.getElement().setAttribute("aria-label", element.getAttribute("aria-label") ?? "");
+        // `getElement()` is typed as HTMLElement, but every marker in this file is
+        // built from a `document.createElement("button")` a few lines above and
+        // never replaced, so the cast narrows to what is already true.
+        const current = existing.getElement() as HTMLButtonElement;
+        current.className = element.className;
+        current.setAttribute("aria-label", element.getAttribute("aria-label") ?? "");
+        // The badge number and the disabled state are part of what this marker
+        // *shows*, so they have to be refreshed like className is. Skipping them
+        // left the map claiming one thing and announcing another: after a
+        // reorder the aria-label read out "Stop 3: Gate" while the marker still
+        // displayed 1, and a stop deactivated in the admin screen went grey but
+        // stayed clickable and draggable.
+        current.textContent = element.textContent;
+        current.disabled = element.disabled;
         continue;
       }
 
-      const marker = new Marker({ element, anchor: "center" }).addTo(map);
+      /**
+       * `setLngLat` before `addTo`, not after.
+       *
+       * A Marker constructed without a `lngLat` keeps `_lngLat` as
+       * `undefined` - `LngLat.convert(undefined)` returns the input unchanged
+       * rather than throwing - and `addTo()` then reads `.lng` off it and the
+       * whole effect dies with "Cannot read properties of undefined". Setting
+       * the position first is not a style preference; it is the only order in
+       * which this call is valid.
+       *
+       * The existing-marker branch above already did this correctly, which is
+       * why the bug only ever appeared on the first render, when every marker
+       * is new.
+       */
+      const marker = new Marker({ element, anchor: "center" })
+        .setLngLat(toLngLat({ lat: stop.lat, lng: stop.lng }))
+        .addTo(map);
       stopMarkers.current.set(stop.id, marker);
 
       element.addEventListener("click", (event) => {
         event.stopPropagation();
+        // Read the stop as it is now, not as it was when this marker was
+        // created. The id is the marker key and never changes, so capturing it
+        // is safe; the name, detail and position are not.
+        const live = stopsRef.current.find((s) => s.id === stop.id);
+        if (!live) return;
         popupRef.current
-          ?.setLngLat(toLngLat({ lat: stop.lat, lng: stop.lng }))
+          ?.setLngLat(toLngLat({ lat: live.lat, lng: live.lng }))
           .setHTML(
-            `<strong>${escapeHtml(stop.name)}</strong>` +
-              (stop.detail ? `<br><span>${escapeHtml(stop.detail)}</span>` : ""),
+            `<strong>${escapeHtml(live.name)}</strong>` +
+              (live.detail ? `<br><span>${escapeHtml(live.detail)}</span>` : ""),
           )
           .addTo(map);
-        stopClickRef.current?.(stop.id);
+        stopClickRef.current?.(live.id);
       });
 
       if (!reorderRef.current) continue;
@@ -387,9 +496,13 @@ export default function MapCanvas({
         draggingRef.current = null;
         element.classList.remove("navika-marker--dragging");
 
-        const position = marker.getLngLat();
-        const from = orderedStops.findIndex((s) => s.id === stop.id);
+        // Same reason as the click handler: this listener was attached when the
+        // marker was created and must not answer from that render's route.
+        const stops = stopsRef.current;
+        const from = stops.findIndex((s) => s.id === stop.id);
         if (from < 0) return;
+
+        const position = marker.getLngLat();
 
         /**
          * The drop slot comes from projecting the marker onto the route, not
@@ -397,20 +510,22 @@ export default function MapCanvas({
          * can be a few pixels apart on screen while being far apart along the
          * path, and pixel distance gets that exactly backwards.
          */
-        const path = line.length >= 2 ? line : orderedStops.map((s) => ({ lat: s.lat, lng: s.lng }));
+        const line = lineRef.current;
+        const path = line.length >= 2 ? line : stops.map((s) => ({ lat: s.lat, lng: s.lng }));
         const dropped = { lat: position.lat, lng: position.lng };
         const projected = nearestOnPolyline(dropped, path);
         const to = projected
-          ? slotFromT(projected.t, orderedStops.length)
-          : nearestOtherStopIndex(orderedStops, stop.id, dropped);
+          ? slotFromT(projected.t, stops.length)
+          : nearestOtherStopIndex(stops, stop.id, dropped);
 
         // Snap home immediately. If the caller keeps the order it was given,
         // this is the visual answer; if it commits a new order, this effect
         // overwrites the snap a frame later.
-        marker.setLngLat(toLngLat({ lat: stop.lat, lng: stop.lng }));
+        const home = stops[from];
+        marker.setLngLat(toLngLat({ lat: home.lat, lng: home.lng }));
 
         if (to >= 0 && to !== from) {
-          void reorderRef.current?.(moveItem(orderedStops.map((s) => s.id), from, to));
+          void reorderRef.current?.(moveItem(stops.map((s) => s.id), from, to));
         }
       });
     }
@@ -444,15 +559,19 @@ export default function MapCanvas({
 
       element.addEventListener("click", (event) => {
         event.stopPropagation();
+        // Live lookup, as with stops: a bus marker outlives every prop change,
+        // and a socket ping is the most frequent prop change in the product.
+        const live = vehiclesRef.current.find((v) => v.id === vehicle.id);
+        if (!live) return;
         // `localHref` rejects anything that is not a path inside this app, so a
         // vehicle label or href arriving from a socket payload cannot turn the
         // popup into a link to somewhere else.
-        const href = vehicle.href ? localHref(vehicle.href) : null;
+        const href = live.href ? localHref(live.href) : null;
         popupRef.current
-          ?.setLngLat(toLngLat({ lat: vehicle.lat, lng: vehicle.lng }))
+          ?.setLngLat(toLngLat({ lat: live.lat, lng: live.lng }))
           .setHTML(
-            `<strong>${escapeHtml(vehicle.label)}</strong>` +
-              (vehicle.detail ? `<br><span>${escapeHtml(vehicle.detail)}</span>` : "") +
+            `<strong>${escapeHtml(live.label)}</strong>` +
+              (live.detail ? `<br><span>${escapeHtml(live.detail)}</span>` : "") +
               (href
                 ? `<br><a class="navika-popup-link" href="${escapeHtml(href)}">Open details</a>`
                 : ""),
@@ -467,12 +586,24 @@ export default function MapCanvas({
         const current = existing.getElement();
         current.className = element.className;
         current.setAttribute("aria-label", element.getAttribute("aria-label") ?? "");
+        // The plate number is the whole point of the marker, so it has to track
+        // the data. Renaming a bus in the admin screen used to leave the old
+        // plate drawn on the map while the popup for it showed the new one.
+        current.textContent = element.textContent;
         continue;
       }
 
-      const marker = new Marker({ element, anchor: "center" }).addTo(map);
+      /*
+       * Same ordering bug as the stop markers above, and the same fix: the
+       * position has to be set before the marker joins the map, or `addTo()`
+       * dereferences an undefined LngLat. This one was less obvious because a
+       * `setLngLat` *was* present on the next line - just too late, after the
+       * call that already threw.
+       */
+      const marker = new Marker({ element, anchor: "center" })
+        .setLngLat(toLngLat({ lat: vehicle.lat, lng: vehicle.lng }))
+        .addTo(map);
       vehicleMarkers.current.set(vehicle.id, marker);
-      marker.setLngLat(toLngLat({ lat: vehicle.lat, lng: vehicle.lng }));
       if (vehicle.heading != null) marker.setRotation(vehicle.heading);
     }
   }, [usableVehicles, ready]);

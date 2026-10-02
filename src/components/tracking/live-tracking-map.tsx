@@ -27,6 +27,16 @@ import { etaLabel } from "@/lib/utils";
 export type LiveTrackingMapProps = {
   busId: string;
   busLabel: string;
+  /**
+   * The instant the page decided freshness against, from `getTrackingView`.
+   *
+   * Required, and not defaulted, because the badge below is server-rendered and
+   * prints a literal "42s ago". Two independent clock reads cannot produce the
+   * same rounded second, so a default here would mean a hydration mismatch on
+   * essentially every page load where the bus pinged 15-60 seconds ago — which
+   * is the ordinary case, not an edge case. See `FleetMap`'s `serverNow`.
+   */
+  serverNow: number;
   stops: MapStop[];
   geometry?: LatLng[];
   /** Last position the server had on file, so the map is never blank. */
@@ -41,6 +51,7 @@ export type LiveTrackingMapProps = {
 export function LiveTrackingMap({
   busId,
   busLabel,
+  serverNow,
   stops,
   geometry,
   initialPosition,
@@ -70,8 +81,11 @@ export function LiveTrackingMap({
    * live forever on a tab left open after the driver closed the app — which is
    * precisely the lie this component exists to avoid.
    */
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(serverNow);
   useEffect(() => {
+    // No immediate sync: `serverNow` is a correct reading, just an old one, and
+    // the first tick lands within a second. Setting state in the effect body
+    // instead would render twice on mount and trip `set-state-in-effect`.
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, []);

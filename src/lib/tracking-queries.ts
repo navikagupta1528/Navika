@@ -104,7 +104,8 @@ export async function getTrackingView(
   userId: string,
   role: Role,
   busId: string,
-): Promise<{ view: TrackingView } | { denial: WatchDenial }> {
+  nowMs: number = Date.now(),
+): Promise<{ view: TrackingView; asOf: number } | { denial: WatchDenial }> {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
     select: {
@@ -186,9 +187,14 @@ export async function getTrackingView(
 
   const hasPosition =
     bus.currentLat !== null && bus.currentLng !== null && bus.lastLocationAt !== null;
+  // Same rule `getFleetPositions` follows, and for the same reason: one instant
+  // serves the staleness decision, the ETA gate and the client's first render.
+  // A second `Date.now()` read here would be a different clock from the `asOf`
+  // the page hands the map, so a position could be judged fresh here and stale
+  // there.
   const positionAge: TrackingView["positionAge"] = !hasPosition
     ? "none"
-    : Date.now() - bus.lastLocationAt!.getTime() > LIVE_WINDOW_MS
+    : nowMs - bus.lastLocationAt!.getTime() > LIVE_WINDOW_MS
       ? "stale"
       : "fresh";
 
@@ -205,6 +211,7 @@ export async function getTrackingView(
   }
 
   return {
+    asOf: nowMs,
     view: {
       bus: {
         id: bus.id,

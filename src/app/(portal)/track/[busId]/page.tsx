@@ -69,7 +69,7 @@ export default async function TrackBusPage({
     );
   }
 
-  const { view } = result;
+  const { view, asOf } = result;
 
   const nav = [
     {
@@ -123,6 +123,7 @@ export default async function TrackBusPage({
         </div>
 
         <LiveTrackingMap
+          serverNow={asOf}
           busId={view.bus.id}
           busLabel={view.bus.label}
           watchLabel={view.viewerStop?.name ?? null}

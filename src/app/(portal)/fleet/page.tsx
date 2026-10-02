@@ -75,6 +75,7 @@ export default async function FleetPage() {
           ) : null}
 
           <FleetMap
+            serverNow={asOf}
             buses={buses.map((b) => ({
               id: b.busId,
               label: b.label,

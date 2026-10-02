@@ -42,9 +42,37 @@ export type FleetBus = {
   href?: string | null;
 };
 
-export function FleetMap({ buses, height = "30rem" }: { buses: FleetBus[]; height?: string }) {
+export function FleetMap({
+  buses,
+  serverNow,
+  height = "30rem",
+}: {
+  buses: FleetBus[];
+  serverNow: number;
+  height?: string;
+}) {
   const [live, setLive] = useState<Record<string, BusLocationPayload>>({});
-  const [now, setNow] = useState(() => Date.now());
+
+  /**
+   * Start from the clock the query used, not from a fresh `Date.now()`.
+   *
+   * This badge is server-rendered, so whatever `now` holds during the first
+   * render is what lands in the HTML — and the client's first render has to
+   * produce the same bytes or React discards the tree and re-renders with a
+   * hydration error in the console. Reading the clock here rather than in the
+   * page guarantees a mismatch whenever a bus crosses `STALE_AFTER_MS` between
+   * the server's read and the browser's, which is rare, and therefore the kind
+   * of bug that gets reported as "the console complains sometimes".
+   *
+   * `getFleetPositions` already returns the instant it filtered against as
+   * `asOf`, and documents why one clock has to serve both sides. This reuses
+   * that value rather than taking a second reading a few milliseconds later,
+   * which is the exact drift the comment there warns about.
+   *
+   * Required rather than optional: a default would reintroduce the second
+   * clock silently at every call site that forgot it.
+   */
+  const [now, setNow] = useState(serverNow);
   const [announcements, setAnnouncements] = useState<StopArrivalPayload[]>([]);
 
   /**
@@ -60,6 +88,9 @@ export function FleetMap({ buses, height = "30rem" }: { buses: FleetBus[]; heigh
   );
 
   useEffect(() => {
+    // No immediate sync: `serverNow` is a correct reading, just an old one, and
+    // the first tick lands within a second. Setting state in the effect body
+    // instead would render twice on mount and trip `set-state-in-effect`.
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, []);
