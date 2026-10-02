@@ -92,9 +92,22 @@ function actionFields(form: string, body: FormData): void {
 }
 
 /** A session cookie, and a `fetch` that carries it. */
+export type PageResponse = {
+  status: number;
+  html: string;
+  location: string;
+  /**
+   * The whole header bag, kept because an assertion about content type or
+   * caching is invisible in the body: a CSV route can serve HTML with a 200 and
+   * every "is it a CSV" check that reads the text alone will pass on the login
+   * page instead of noticing it.
+   */
+  headers: Headers;
+};
+
 export type Session = {
   cookie: string;
-  get: (path: string) => Promise<{ status: number; html: string; location: string }>;
+  get: (path: string) => Promise<PageResponse>;
   submit: (
     path: string,
     marker: string,
@@ -156,6 +169,7 @@ export async function login(
         status: res.status,
         html: await res.text(),
         location: res.headers.get("location") ?? "",
+        headers: res.headers,
       };
     },
 
@@ -178,6 +192,7 @@ export async function login(
         status: res.status,
         html: await res.text(),
         location: res.headers.get("location") ?? "",
+        headers: res.headers,
       };
     },
   };

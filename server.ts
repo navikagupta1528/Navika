@@ -25,6 +25,7 @@ import next from "next";
 import { attachSocketServer, setSocketServer } from "./src/server/socket";
 import { isSocketRequest } from "./src/lib/socket-events";
 import { resetStaleSimulationFlags } from "./src/server/simulator-runner";
+import { startTripReconciler } from "./src/server/trip-reconciler";
 
 // `npm start` passes --prod instead of setting NODE_ENV inline, because
 // `NODE_ENV=production node server.js` is not valid in PowerShell or cmd.exe.
@@ -69,6 +70,21 @@ async function main() {
    * another's flags would stop buses that are driving perfectly well.
    */
   await resetStaleSimulationFlags();
+
+  /*
+   * Close trips that were started and never finished.
+   *
+   * A trip left ONGOING by a crashed deploy or a driver whose phone died keeps
+   * its bus looking live on the fleet map, blocks that driver from starting the
+   * next run, and adds an unfinished run to every attendance report. The boot
+   * sweep repairs whatever the previous process left behind, which is the common
+   * case, and the interval covers a phone dying while the app is up.
+   *
+   * A server-side timer for the same reason the simulator has one: a browser tab
+   * cannot be trusted to still be running in an hour, and nobody is guaranteed
+   * to load a page.
+   */
+  await startTripReconciler();
 
   const io = attachSocketServer(server);
   setSocketServer(io);

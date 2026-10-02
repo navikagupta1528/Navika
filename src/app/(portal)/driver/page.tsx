@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/db";
 import { getTripPickupSummary } from "@/lib/queries";
+import { dayWindow } from "@/lib/day-window";
 import { Role } from "@/generated/prisma/enums";
 import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
 import { DriverGpsPanel } from "@/components/driver/driver-gps-panel";
@@ -15,6 +16,7 @@ import {
   StatTile,
 } from "@/components/ui/primitives";
 import { formatDate, formatTime } from "@/lib/utils";
+import { isTripAbandoned } from "@/lib/trip-liveness";
 
 export const metadata: Metadata = { title: "Driver panel" };
 
@@ -22,10 +24,19 @@ export default async function DriverDashboard() {
   const session = await requireRole(Role.DRIVER);
   const user = await getCurrentUser();
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  /*
+   * Read the clock once, inside a function rather than in the component body.
+   *
+   * A component that calls `Date.now()` itself gets an unstable value on
+   * re-render, which is what the react-hooks purity rule exists to stop. The
+   * instant is still needed here - "today" and "did this run go quiet" both
+   * depend on it - so it is read in a plain function and handed back, the same
+   * way `getFleetPositions` returns `asOf`.
+   *
+   * One read for the whole page, so "today" cannot mean two different days
+   * partway down if the render straddles midnight.
+   */
+  const { now, start, end } = dayWindow();
 
   const tripSelect = {
     id: true,
@@ -34,6 +45,11 @@ export default async function DriverDashboard() {
     date: true,
     startedAt: true,
     scheduledStart: true,
+    endedAt: true,
+    // Loaded only so the abandoned-run check below has what it needs. The rule
+    // itself is in src/lib/trip-liveness.ts and is unit tested.
+    createdAt: true,
+    updatedAt: true,
     bus: {
       select: {
         id: true,
@@ -95,7 +111,10 @@ export default async function DriverDashboard() {
           select: tripSelect,
         }),
         prisma.trip.findFirst({
-          where: { driverId: session.userId, status: "COMPLETED" },
+          where: {
+            driverId: session.userId,
+            status: { in: ["COMPLETED", "ONGOING"] },
+          },
           orderBy: [{ date: "desc" }, { endedAt: "desc" }],
           select: tripSelect,
         }),
@@ -103,6 +122,19 @@ export default async function DriverDashboard() {
 
   const shown = trip ?? nextTrip ?? lastTrip;
   const isFallback = !trip && shown !== null;
+
+  /*
+   * A run that is still marked ONGOING but has gone quiet is one this driver
+   * never got to finish - the phone died, the tab was closed, the server
+   * restarted. The background reconciler will close it within ten minutes, but
+   * the screen has to be honest right now: it is shown as the last trip they
+   * ran, and it must not be presented as one still in progress.
+   *
+   * The boolean is derived here and passed down as a flag rather than as a
+   * timestamp, so no value that differs between server and client render can
+   * reach the browser.
+   */
+  const shownIsAbandoned = shown !== null && isTripAbandoned(shown, now);
 
   const summary = shown ? await getTripPickupSummary(shown.id) : null;
 
@@ -137,7 +169,17 @@ export default async function DriverDashboard() {
         description="Your route for today, with the students waiting at each stop."
       />
 
-      {isFallback && shown ? (
+      {shownIsAbandoned && shown ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 inset-ring-1 inset-ring-amber-200">
+          <p className="font-medium">That run did not finish.</p>
+          <p className="mt-0.5 text-xs">
+            It stopped reporting on {formatDate(shown.date)}
+            {shown.startedAt ? ` at ${formatTime(shown.startedAt)}` : ""} and has been
+            closed automatically, so the records show who was picked up and who was
+            not. Ask the office to review it if that is not right.
+          </p>
+        </div>
+      ) : isFallback && shown ? (
         <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 inset-ring-1 inset-ring-blue-200">
           <p className="font-medium">
             {nextTrip
