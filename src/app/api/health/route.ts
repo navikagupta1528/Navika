@@ -1,9 +1,9 @@
 /**
  * GET /api/health - the endpoint a container platform polls.
  *
- * Public on purpose: Render, Docker's HEALTHCHECK and any load balancer all
- * need to reach it before anyone has logged in. The proxy matcher already
- * excludes `/api`, so nothing here needs to opt out of a redirect.
+ * Public on purpose: Render, a load balancer and any uptime monitor all need to
+ * reach it before anyone has logged in. The proxy matcher already excludes
+ * `/api`, so nothing here needs to opt out of a redirect.
  *
  * Two questions get answered separately, because they have different meanings:
  *

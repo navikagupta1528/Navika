@@ -21,12 +21,14 @@ databases:
 services:
   - type: web
     name: navika
-    # Use the Dockerfile rather than Render's native Node builder. The native
-    # builder runs `next start`, and that has no Socket.IO server attached, so
-    # live tracking would silently never connect. The whole point of
-    # server.ts is that one process serves both the pages and the socket.
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    # Render's native Node builder, NOT `next start`. The default start command
+    # runs `next start`, which has no Socket.IO server attached, so live tracking
+    # would silently never connect while every page still rendered perfectly -
+    # the hardest kind of bug to notice. server.ts is one process serving both
+    # the pages and the socket, so it is what has to run.
+    runtime: node
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
 
     # Cheapest tier that will not fall over with two drivers and a few hundred
     # parents on it. Scale up, not the process count.
@@ -47,9 +49,6 @@ services:
     # hardcoded 200 would keep a broken instance in the load balancer.
     healthCheckPath: /api/health
 
-    # Socket.IO holds connections open. Render closes idle ones after 100s, and
-    # every reconnect is a thundering herd against the database, so keepalive
-    # is on by default - this just makes the intent explicit.
     autoDeploy: true
 
     envVars:
@@ -95,6 +94,10 @@ services:
 
       # ---- deliberately NOT set: PORT and HOSTNAME ------------------------
       # Render injects both, and hardcoding them here risks disagreeing with
-      # the port the platform actually routes to. The Dockerfile's defaults
-      # (`PORT=3010`, `HOSTNAME=0.0.0.0`) exist for a local `docker run`, and
-      # whatever Render sets wins over them.
+      # the port the platform actually routes to. server.ts reads PORT from the
+      # environment and defaults to 3010 for local runs, so whatever Render
+      # sets wins without needing a line here.
+
+    # Socket.IO holds connections open and Render closes idle ones after 100s.
+    # Every reconnect is a thundering herd against the database, so keepalive is
+    # on - this just makes the intent explicit.

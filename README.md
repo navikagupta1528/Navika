@@ -61,10 +61,12 @@ checks across six suites, 36 routes building.**
 
 **Phase 5 - deployment**
 
-- Dockerfile, multi-stage, running as a non-root user
-- `render.yaml` blueprint including a managed Postgres
+- `render.yaml` blueprint including a managed Postgres, pinned to a start
+  command that runs `server.ts` rather than `next start`
 - `/api/health` for the load balancer, which distinguishes an unreachable
   database from an un-migrated one
+- No container image: Render's native Node builder runs the same command
+  sequence as a laptop, which is what made this deployable at all
 
 **Beyond the roadmap** — four areas built after the six phases were met:
 
@@ -100,9 +102,11 @@ checks across six suites, 36 routes building.**
 | Validation         | Zod v4                             | One schema shared by form and Server Action                       |
 | Tests              | Vitest + HTTP smoke scripts        | Pure logic unit tested; authorization tested end to end           |
 
-**Deploy on a Node host** (Render, Railway, Fly, a VPS, Docker). Not Vercel:
+**Deploy on a Node host** (Render, Railway, Fly, a VPS). Not Vercel:
 Socket.IO needs a persistent connection and does not work on Vercel's
-serverless runtime.
+serverless runtime. There is no container image to build — the app is a plain
+Node process, and the deploy is `npm ci && npm run build` followed by
+`npm run start`.
 
 ## Getting started
 
@@ -212,7 +216,6 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:all`     | All six smoke suites                                     |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
-| `npm run check:runtime-tree` | Reject accidental `server-only` imports into client code |
 | `npm run setup:db`      | One-time database provisioning                           |
 | `npm run db:start`      | Start the local database cluster (needed after boot)     |
 | `npm run db:migrate`    | Create and apply a migration in development              |
@@ -221,8 +224,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run db:studio`     | Prisma Studio                                            |
 | `npm run db:reset`      | Drop, re-migrate and re-seed                             |
 | `npm run setup`         | All three setup steps in order                           |
-| `npm run docker:build`  | Build the production image                               |
-| `npm run docker:run`    | Run it on 3010 against `.env`                            |
+| `npm run lighthouse`    | Score the app and fail on a regression                    |
 
 The smoke suites need a running dev server and a live database. Start both, then
 run them.
@@ -240,25 +242,31 @@ and will say so plainly rather than failing obscurely if the database is bare.
 
 ## Deploying
 
-### Docker
+There is no container image. Navika is a plain long-lived Node process, and the
+deploy is two commands:
 
 ```bash
-npm run docker:build
-npm run docker:run
+npm ci
+npm run build
+npm run start          # this is `tsx server.ts --prod`
 ```
 
-The image runs as a non-root user and has a `HEALTHCHECK` that calls the real
-`/api/health`, so a process that is up but cannot reach Postgres is reported
-unhealthy rather than passing on a hardcoded 200.
+`npm run start` is the whole deployment story, and the "start" is not
+`next start`. Next's own start command serves pages but no socket, so live
+tracking would fail *quietly* — every dashboard would render, and no bus would
+ever move. `server.ts` is one process serving both, which is the only reason
+Socket.IO works here at all.
 
-Migrations are **not** run at container start. Two containers booting together
-would race each other, and a half-applied migration is worse than a failed
-deploy. Apply them once as a release step, before the new container serves
-traffic:
+Run migrations as a **release step, before the new build takes traffic**:
 
 ```bash
 npx prisma migrate deploy
 ```
+
+Not as a startup command, and this is not a style preference. Two instances
+starting together race each other through the migration list, and a half-applied
+migration is worse than a failed deploy: the deploy stops and the old build keeps
+serving. `render.yaml` expresses this as `preDeployCommand`.
 
 ### Render
 
@@ -307,11 +315,10 @@ scripts/
   smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
   check-osrm.ts          is the routing server reachable and sane?
-  check-runtime-tree.ts  reject server-only imports reaching the client
+  lighthouse.mjs         score the app, fail on a regression
   find-broken-line.mjs   locate the first line that breaks parsing
   lib/http.ts            shared smoke helpers
 server.ts                custom Node server: Next.js + Socket.IO
-Dockerfile               multi-stage production image
 render.yaml              Render blueprint, incl. managed Postgres
 src/
   app/
@@ -421,13 +428,13 @@ Three limits worth stating plainly:
   the underlying core directly, which is why the cores take an explicit
   `Actor` and live outside the request scope.
 - No browser automation is wired up, so nothing here verifies pixels. The smoke
-  suites check copy and authorization, not layout.
+  suites check copy and authorization, not layout. Lighthouse scores the public
+  pages but does not click anything either.
 - Socket broadcast payload shape is covered by the handshake suite but not by a
   full end-to-end delivery assertion.
-- The Docker image has never been built. Docker is not installed on the machine
-  this was developed on, so the base image, the apt packages, the non-root user
-  and the `HEALTHCHECK` are written but unverified. Everything else in this
-  document has been run.
+- Lighthouse is measured against `/login` on a developer laptop. Mobile emulation
+  applies a 4× CPU slowdown and a slow-4G profile, so a real phone on a real
+  network will differ — in either direction.
 
 ## Design decisions worth knowing
 

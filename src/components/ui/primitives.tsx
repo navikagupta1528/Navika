@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type Tone = "slate" | "emerald" | "amber" | "red" | "blue" | "violet";
@@ -11,6 +11,19 @@ const TONE_CLASSES: Record<Tone, string> = {
   blue: "bg-blue-50 text-blue-700 inset-ring-1 inset-ring-blue-200",
   violet: "bg-violet-50 text-violet-700 inset-ring-1 inset-ring-violet-200",
 };
+
+/**
+ * Index for a stagger.
+ *
+ * `navika-stagger` reads `--navika-i` off each child and turns it into an
+ * animation delay. Exposing this as a helper rather than making every call
+ * site cast a custom property keeps the type cast in one place - inline
+ * `style={{ "--navika-i": i } as CSSProperties}` at twenty call sites is
+ * twenty places to get the syntax subtly wrong, and the failure is silent.
+ */
+export function staggerIndex(index: number): CSSProperties {
+  return { "--navika-i": index } as CSSProperties;
+}
 
 export function Badge({
   children,
@@ -37,14 +50,20 @@ export function Badge({
 export function Card({
   children,
   className,
+  /** Adds the hover lift. Off by default: a lift on a dense data table row is
+   *  motion without meaning. Turn it on for the standalone cards a pointer
+   *  might plausibly click. */
+  lift = false,
 }: {
   children: ReactNode;
   className?: string;
+  lift?: boolean;
 }) {
   return (
     <div
       className={cn(
         "rounded-xl border border-slate-200 bg-white p-5 shadow-sm",
+        lift && "navika-lift",
         className,
       )}
     >
@@ -96,7 +115,7 @@ export function StatTile({
   };
 
   return (
-    <Card>
+    <Card lift>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </p>
@@ -105,6 +124,22 @@ export function StatTile({
       </p>
       {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
     </Card>
+  );
+}
+
+/**
+ * Placeholder block for content that has not arrived.
+ *
+ * The shape is carried by the caller (`className` sets width and height)
+ * because a skeleton that guesses its own size is a layout shift waiting to
+ * happen - which is worse than an empty box.
+ */
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={cn("navika-skeleton rounded-lg", className)}
+    />
   );
 }
 
@@ -136,12 +171,24 @@ export function StatusDot({
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
       <span className="relative flex h-2 w-2">
+        {/*
+          The ping is a second element rather than an animation on the dot
+          itself, because `animate-ping` scales the element it is applied to -
+          and that element is the only thing conveying state. A state
+          indicator should never be the thing that shrinks.
+
+          Decorative, so hidden from assistive tech; the word beside it is
+          what actually carries the meaning.
+        */}
         {online ? (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span
+            aria-hidden
+            className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"
+          />
         ) : null}
         <span
           className={cn(
-            "relative inline-flex h-2 w-2 rounded-full",
+            "relative inline-flex h-2 w-2 rounded-full transition-colors",
             online ? "bg-emerald-500" : "bg-slate-300",
           )}
         />

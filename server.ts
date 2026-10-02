@@ -64,7 +64,7 @@ async function main() {
    * feature was added to fix.
    *
    * Correct only because there is a single server process. `render.yaml` pins
-   * `numInstances: 1` for this reason, and so does the Dockerfile's one-process
+   * `numInstances: 1` for this reason, and the deploy is one Node process by
    * design; if this app ever scales horizontally this call would have to be
    * replaced by an ownership table or a lease, because one instance clearing
    * another's flags would stop buses that are driving perfectly well.
@@ -111,8 +111,8 @@ async function main() {
     );
   });
 
-  // Docker and Render send SIGTERM on deploy. Close the realtime connections
-  // first so open sockets do not keep the process alive for 30 seconds.
+  // Render, Railway and systemd all send SIGTERM on deploy. Close the realtime
+  // connections first so open sockets do not keep the process alive for 30s.
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       console.log(`\n  ${signal} received, shutting down`);

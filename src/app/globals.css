@@ -12,8 +12,14 @@
   --color-brand-800: oklch(0.36 0.08 162);
   --color-brand-900: oklch(0.29 0.06 162);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /*
+   * The mono stack is spelled out here rather than coming from a `next/font`
+   * variable. It used to be Geist Mono loaded at the root, which meant a 29 KB
+   * font preload on every page - including the sign-in screen, which renders
+   * no monospaced text at all. See the note in layout.tsx.
+   */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
 }
 
 :root {
@@ -87,6 +93,238 @@ body {
     @apply rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700
            inset-ring-1 inset-ring-red-200;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion                                                              */
+/*                                                                     */
+/* Two rules govern everything in this section, and both exist for a   */
+/* reason rather than for taste:                                        */
+/*                                                                     */
+/* 1. Only `transform` and `opacity` are ever animated. Both are the  */
+/*    two properties a compositor can handle without re-running        */
+/*    layout or paint. Animating `height`, `top` or `box-shadow` here  */
+/*    would put main-thread work on every frame of every entrance,     */
+/*    which is exactly what the Total Blocking Time score measures.    */
+/*                                                                     */
+/* 2. It all lives inside `prefers-reduced-motion: no-preference`.     */
+/*    Gating on the *absence* of the preference rather than overriding */
+/*    it in the `reduce` branch means a reduced-motion visitor gets no */
+/*    animation at all - not a cancelled one that still pays for the   */
+/*    compositor work. A bus tracker gets opened in a moving vehicle   */
+/*    more often than most apps, and that is the audience most likely */
+/*    to have the setting on.                                          */
+/*                                                                     */
+/* Entrances deliberately never animate `opacity` from 0 on the main   */
+/* content. Largest Contentful Paint is recorded when an element first */
+/* paints, and an element at `opacity: 0` has not painted - so a fade */
+/* pushes LCP out by the full length of the fade. `translateY` does    */
+/* not: the element is painted on the first frame regardless.         */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Small rise, no fade. Enough to read as "arrived", short enough not
+   * to feel like waiting. */
+  @keyframes navika-rise {
+    from {
+      transform: translate3d(0, 10px, 0);
+    }
+    to {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  /* The horizontal nudge used for the active nav rail. */
+  @keyframes navika-rail {
+    from {
+      transform: scaleY(0.2);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  /* Slow drift for the ambient background on the sign-in screen. */
+  @keyframes navika-drift-a {
+    from {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    to {
+      transform: translate3d(6%, 4%, 0) scale(1.15);
+    }
+  }
+
+  @keyframes navika-drift-b {
+    from {
+      transform: translate3d(0, 0, 0) scale(1.1);
+    }
+    to {
+      transform: translate3d(-7%, -5%, 0) scale(1);
+    }
+  }
+
+  /* The skeleton sweep. Translates a highlight across a fixed box rather
+   * than moving the box's background-position, which would repaint. */
+  @keyframes navika-sweep {
+    from {
+      transform: translate3d(-100%, 0, 0);
+    }
+    to {
+      transform: translate3d(200%, 0, 0);
+    }
+  }
+
+  /* --- entrances -------------------------------------------------- */
+
+  .navika-rise {
+    animation: navika-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Staggered lists. The consumer sets `--navika-i` to the item index and
+   * `min()` caps it, so a 40-row table does not spend two seconds
+   * staggering. Capping in CSS rather than in JS means the caller cannot
+   * forget to. */
+  .navika-stagger > * {
+    animation: navika-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(min(var(--navika-i, 0), 10) * 45ms);
+  }
+
+  /* --- ambient ---------------------------------------------------- */
+
+  .navika-ambient-a {
+    animation: navika-drift-a 22s ease-in-out infinite alternate;
+  }
+
+  .navika-ambient-b {
+    animation: navika-drift-b 28s ease-in-out infinite alternate;
+  }
+
+  /* --- interaction feedback ---------------------------------------- */
+
+  /*
+   * Buttons get the press feedback by selector rather than by a shared
+   * `.navika-press` class. Tailwind v4 cannot `@apply` a class defined in this
+   * file, only real utilities, so `.btn { @apply navika-press }` is a build
+   * error - see the note at the top of this file. It also would not have been
+   * the better design: adding the class at every call site means one forgotten
+   * button, and nothing in review catches that.
+   */
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost {
+    transition:
+      transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease;
+  }
+
+  .btn:hover,
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-danger:hover,
+  .btn-ghost:hover {
+    transform: translate3d(0, -1px, 0);
+  }
+
+  /*
+   * A shorter duration on press. The release is the part the eye reads as
+   * "it went down and came back", so a long easing curve on the way back
+   * makes a button feel like it is being reluctant.
+   */
+  .btn:active,
+  .btn-primary:active,
+  .btn-secondary:active,
+  .btn-danger:active,
+  .btn-ghost:active {
+    transform: translate3d(0, 0, 0) scale(0.98);
+    transition-duration: 60ms;
+  }
+
+  /* Cards lift. The shadow is transitioned, not animated, so it costs one
+   * repaint on hover and then nothing - hover is not a loop. */
+  .navika-lift {
+    transition:
+      transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .navika-lift:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow:
+      0 4px 6px -1px rgb(15 23 42 / 0.07),
+      0 12px 24px -8px rgb(15 23 42 / 0.12);
+  }
+
+  /* The active-item rail in the sidebar. `scaleY` from the centre, so the
+   * mark grows out of its own middle rather than sliding in from an edge. */
+  .navika-rail::before {
+    content: "";
+    position: absolute;
+    inset-block: 0.4rem;
+    left: 0;
+    width: 0.1875rem;
+    border-radius: 9999px;
+    background: var(--color-brand-600);
+    transform-origin: center;
+    animation: navika-rail 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Loading skeleton. The grey base is always painted; only the highlight
+   * moves, so the sweep never triggers layout. */
+  .navika-sweep::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.7),
+      transparent
+    );
+    animation: navika-sweep 1.4s ease-in-out infinite;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Ambient background (auth screens)                                    */
+/* ------------------------------------------------------------------ */
+
+.navika-ambient {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  pointer-events: none;
+  /* Below the card, above the page background. `inset-0` + `overflow-hidden`
+   * on the parent keeps the drift from creating a scrollbar. */
+}
+
+.navika-ambient--a {
+  top: -14%;
+  left: -8%;
+  width: 26rem;
+  height: 26rem;
+  background: oklch(0.82 0.13 162 / 0.5);
+}
+
+.navika-ambient--b {
+  right: -10%;
+  bottom: -18%;
+  width: 30rem;
+  height: 30rem;
+  background: oklch(0.85 0.09 230 / 0.45);
+}
+
+/* ------------------------------------------------------------------ */
+/* Skeleton                                                            */
+/* ------------------------------------------------------------------ */
+
+.navika-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-slate-200);
 }
 
 /* ------------------------------------------------------------------ */
@@ -202,5 +440,53 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse {
     animation: none;
+  }
+
+  /*
+   * Belt and braces. Everything above is already gated on
+   * `prefers-reduced-motion: no-preference`, so none of it applies here and
+   * these lines would be dead. They are kept anyway, because the gate and this
+   * block are edited independently: a future `navika-*` animation written
+   * outside the gate is then still killed, instead of quietly ignoring the
+   * setting for the one visitor who asked.
+   */
+  .navika-rise,
+  .navika-stagger > *,
+  .navika-ambient-a,
+  .navika-ambient-b,
+  .navika-sweep::after,
+  .navika-rail::before {
+    animation: none !important;
+  }
+
+  .navika-lift {
+    transition: none !important;
+  }
+
+  /* The button transition is colour-only under reduced motion: the lift and
+   * the scale are the movement, and both go. A colour change carries no
+   * vestibular load, so keeping it preserves the hover affordance. */
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease;
+  }
+
+  .btn:hover,
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-danger:hover,
+  .btn-ghost:hover,
+  .btn:active,
+  .btn-primary:active,
+  .btn-secondary:active,
+  .btn-danger:active,
+  .btn-ghost:active {
+    transform: none !important;
   }
 }

@@ -23,6 +23,9 @@ next-env.d.ts
 # testing
 /coverage
 
+# lighthouse reports
+/.lighthouse
+
 # misc
 .DS_Store
 *.pem

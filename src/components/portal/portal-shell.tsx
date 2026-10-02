@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
+import { staggerIndex } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
 export type NavItem = {
@@ -76,25 +77,35 @@ export function PortalShell({
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 p-3">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-                isActive(item)
-                  ? "bg-brand-50 text-brand-800"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-              )}
-            >
-              <span aria-hidden className="w-4 text-center">
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          ))}
+        {/*
+          `relative` on the nav is what positions `.navika-rail`, which is a
+          ::before on the active link. The rail is decorative - the background
+          tint and `aria-current` carry the state - so it stays out of the
+          accessibility tree.
+        */}
+        <nav className="relative flex-1 space-y-1 p-3">
+          {nav.map((item) => {
+            const active = isActive(item);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex items-center gap-3 rounded-lg py-2 pl-4 pr-3 text-sm font-medium transition-colors",
+                  active
+                    ? "navika-rail bg-brand-50 text-brand-800"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                )}
+              >
+                <span aria-hidden className="w-4 text-center">
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="border-t border-slate-200 p-3">
@@ -110,8 +121,8 @@ export function PortalShell({
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
+      <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="navika-stagger mx-auto max-w-6xl">{children}</div>
       </main>
     </div>
   );
@@ -127,7 +138,14 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div
+      className="mb-6 flex flex-wrap items-start justify-between gap-4"
+      // No `navika-rise` here: this div is a direct child of the shell's
+      // `.navika-stagger`, so it is already animated. Adding the class again
+      // would be a second `animation` shorthand fighting the first. The index
+      // is -1 so the header lands ahead of the content below it.
+      style={staggerIndex(-1)}
+    >
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">
           {title}

@@ -25,12 +25,10 @@
     "smoke:boundaries": "tsx scripts/smoke-boundaries.ts",
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",
-    "check:runtime-tree": "tsx scripts/check-runtime-tree.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
     "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin && npm run smoke:tracking && npm run smoke:reconcile && npm run smoke:boundaries",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "docker:build": "docker build -t navika .",
-    "docker:run": "docker run --rm -p 3010:3010 --env-file .env navika"
+    "lighthouse": "node scripts/lighthouse.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -67,6 +65,7 @@
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
+    "lighthouse": "^13.5.0",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "typescript": "^5",
