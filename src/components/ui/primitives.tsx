@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
+import { CountUp } from "./count-up";
 
 type Tone = "slate" | "emerald" | "amber" | "red" | "blue" | "violet";
 
@@ -101,10 +103,21 @@ export function StatTile({
   tone = "slate",
 }: {
   label: string;
-  value: ReactNode;
+  /**
+   * A number animates when it changes; anything else is rendered as given.
+   *
+   * The union is deliberate. Every call site passes a count today, but
+   * `ReactNode` was the signature before and loosening it back would be a
+   * regression in type safety for no gain - the alternative is a separate
+   * component for "a stat that is not a number", which is a component nobody
+   * has asked for.
+   */
+  value: number | ReactNode;
   sub?: ReactNode;
   tone?: Tone;
 }) {
+  const numeric = typeof value === "number" ? value : null;
+
   const accent: Record<Tone, string> = {
     slate: "text-slate-900",
     emerald: "text-emerald-600",
@@ -119,8 +132,14 @@ export function StatTile({
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <p className={cn("mt-2 text-2xl font-semibold tabular-nums", accent[tone])}>
-        {value}
+      {/*
+        `tabular-nums` moved inside CountUp. It has to be there rather than here:
+        a proportional figure changes width as its digits change, so a counting
+        number would shuffle the label above it on every frame. The tile sets the
+        size and colour; the digits set the rhythm.
+      */}
+      <p className={cn("mt-2 text-2xl font-semibold", accent[tone])}>
+        {numeric !== null ? <CountUp value={numeric} /> : value}
       </p>
       {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
     </Card>

@@ -301,6 +301,82 @@ body {
     );
     animation: navika-sweep 1.4s ease-in-out infinite;
   }
+
+  /*
+   * Table rows and list rows.
+   *
+   * An admin list is a wall of near-identical text, and a pointer moving across
+   * it gets no signal at all about which line it is on. A background change
+   * alone is too weak to follow, so an inset shadow marks the row's leading edge
+   * - it gives the eye something with an unambiguous position.
+   *
+   * `focus-within` as well as `hover`, and it is not optional decoration. The
+   * action on each row is a link, so a keyboard user tabbing through a list
+   * would otherwise have no way to know which row they were on. The row lights
+   * up for exactly as long as focus is inside it.
+   *
+   * Background and inset shadow only. Nothing here triggers layout, and hover is
+   * not a loop, so the repaint settles immediately on pointer entry.
+   */
+  .navika-row {
+    transition:
+      background-color 140ms ease,
+      box-shadow 140ms ease;
+  }
+
+  .navika-row:hover,
+  .navika-row:focus-within {
+    background-color: var(--color-slate-50);
+    box-shadow: inset 3px 0 0 var(--color-brand-500);
+  }
+
+  /*
+   * Sidebar links. The active item already has its rail; this is for the ones
+   * that are merely under the pointer, which currently look exactly as dead as
+   * everything else.
+   */
+  .navika-navlink {
+    transition:
+      background-color 140ms ease,
+      transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .navika-navlink:hover {
+    transform: translate3d(2px, 0, 0);
+  }
+
+  /*
+   * A number that changes while you are looking at it.
+   *
+   * A stat that jumps from 41 to 44 is easy to miss, because the digits change
+   * but the eye has already moved on. Animating the transition makes the change
+   * an event. Two constraints keep it honest:
+   *
+   * - It animates `transform` on a whole digit, never `width`. A width animation
+   *   would reflow every cell to its right on every frame.
+   * - The initial render shows the final value, and only a *change* animates. A
+   *   page that loads and counts up from zero is a page lying about its own
+   *   numbers for half a second, and it shifts layout if any digit is wider.
+   */
+  .navika-count-up {
+    display: inline-block;
+    will-change: transform;
+  }
+
+  @keyframes navika-count-up-in {
+    from {
+      transform: translate3d(0, 0.55em, 0);
+      opacity: 0;
+    }
+    to {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+    }
+  }
+
+  .navika-count-up[data-changed="true"] {
+    animation: navika-count-up-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -380,8 +456,31 @@ body {
     box-shadow 120ms ease;
 }
 
+/*
+ * Hover and drag scaling uses the standalone `scale` property, not `transform`.
+ *
+ * MapLibre positions a marker by writing `transform: translate(-50%,-50%)
+ * translate(x,y)` onto the element as an inline style, so it owns `transform`
+ * completely. An inline style beats any rule in this file, which means the
+ * `.navika-marker:hover { transform: scale(1.12) }` and
+ * `.navika-marker--dragging { transform: scale(1.25) }` this replaced could never
+ * take effect: both were dead the moment MapLibre rendered a marker. Written as
+ * `scale` instead, the property is applied *before* `transform` in the
+ * individual-transform-property order, so the two compose and the marker scales
+ * around its own translated position instead of jumping back to the origin.
+ *
+ * `scale` is part of the same compositor-accelerated transform pipeline as
+ * `transform`, so the "transform and opacity only" rule is not being bent here -
+ * this is the same animation under a different property name.
+ */
+.navika-marker {
+  transition:
+    scale 120ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 120ms ease;
+}
+
 .navika-marker:hover:not(:disabled) {
-  transform: scale(1.12);
+  scale: 1.12;
 }
 
 .navika-marker:focus-visible {
@@ -425,12 +524,67 @@ body {
   background: #b45309;
 }
 
+/*
+ * A bus that is reporting, breathing.
+ *
+ * This is the one place in the app where motion carries information rather than
+ * decoration. "Is the bus actually moving right now" is the question every parent
+ * opens this screen to answer, and a position value alone cannot say it: a
+ * marker looks identical whether it arrived two seconds ago or two minutes ago.
+ * The halo answers it peripherally, before any text is read.
+ *
+ * It is deliberately slow and small. A fast or large pulse on a screen that
+ * updates every five seconds is exactly the repeated motion that triggers
+ * vestibular symptoms, and this app gets opened in a moving vehicle.
+ *
+ * `::after` rather than the marker itself, for the same reason the hover scale
+ * uses `scale`: MapLibre owns the element's transform. A child pseudo-element has
+ * its own box and can be animated without touching that.
+ *
+ * `--stale` is set inline by map-canvas.tsx alongside the stale class. A bus that
+ * stopped reporting must stop moving: "we lost it" and "it is not running" are
+ * different facts and should not look alike.
+ */
+.navika-marker--vehicle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentcolor;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes navika-breathe {
+    0% {
+      transform: scale(1);
+      opacity: 0.45;
+    }
+    70%,
+    100% {
+      transform: scale(2.1);
+      opacity: 0;
+    }
+  }
+
+  .navika-marker--vehicle:not(.navika-marker--stale)::after {
+    animation: navika-breathe 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+}
+
 .navika-marker--dragging {
-  transform: scale(1.25);
+  scale: 1.25;
   box-shadow:
     0 2px 4px rgb(15 23 42 / 0.3),
     0 8px 16px rgb(15 23 42 / 0.25);
   cursor: grabbing;
+}
+
+/* Stops do not breathe. A route is static, and a pulsing stop would say
+   "this one is live", which is the one thing a stop never is. */
+.navika-marker--stop::after {
+  content: none;
 }
 
 /* The "Open details" link inside a vehicle popup. MapLibre popups are
@@ -470,11 +624,16 @@ body {
   .navika-ambient-a,
   .navika-ambient-b,
   .navika-sweep::after,
-  .navika-rail::before {
+  .navika-rail::before,
+  .navika-marker--vehicle::after,
+  .navika-count-up {
     animation: none !important;
   }
 
-  .navika-lift {
+  .navika-lift,
+  .navika-marker,
+  .navika-row,
+  .navika-navlink {
     transition: none !important;
   }
 

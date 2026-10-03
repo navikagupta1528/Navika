@@ -43,12 +43,20 @@ export function DataTable({
   );
 }
 
+/**
+ * One data row.
+ *
+ * Carries `navika-row` so the row lights up under the pointer and while focus is
+ * inside it. The focus half is the load-bearing one: every row's action is a
+ * link, so a keyboard user tabbing down a list needs the row to say which line
+ * they are on, and it cannot see a hover state at all.
+ */
 export function Row({
   children,
 }: {
   children: ReactNode;
 }) {
-  return <tr className="align-middle">{children}</tr>;
+  return <tr className="navika-row align-middle">{children}</tr>;
 }
 
 export function Cell({

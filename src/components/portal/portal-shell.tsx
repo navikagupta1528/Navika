@@ -93,7 +93,12 @@ export function PortalShell({
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center gap-3 rounded-lg py-2 pl-4 pr-3 text-sm font-medium transition-colors",
+                  // `navika-navlink` carries the hover slide and background.
+                  // `transition-colors` is deliberately NOT used on its own any
+                  // more: the class transitions background-color and transform
+                  // together, and a second `transition` here would override the
+                  // shorthand's property list and drop the movement.
+                  "navika-navlink relative flex items-center gap-3 rounded-lg py-2 pl-4 pr-3 text-sm font-medium",
                   active
                     ? "navika-rail bg-brand-50 text-brand-800"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",

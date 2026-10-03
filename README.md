@@ -342,7 +342,10 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:tracking`| Tracking, attendance, alerts, notifications              |
 | `npm run smoke:reconcile` | Plant real rows, prove abandoned trips close and live ones don't |
 | `npm run smoke:boundaries` | Every portal page, every role, anonymous and wrong-role  |
-| `npm run smoke:all`     | All seven smoke suites                                    |
+| `npm run smoke:pagination` | Real counts, disjoint pages, clamping, filters surviving paging |
+| `npm run smoke:instrument` | Prove `npm run audit`'s layout-shift observer actually fires |
+| `npm run smoke:all`     | All eight smoke suites                                    |
+| `npm run audit`         | Every route, every role, in a real browser: console, network, hydration, WCAG, layout shift |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
 | `npm run setup:db`      | One-time database provisioning                           |
@@ -368,6 +371,44 @@ npm run smoke:all
 `smoke:admin` and `smoke:tracking` write to and clean up after themselves, but
 both expect the seed: `smoke:tracking` in particular needs two `ONGOING` trips
 and will say so plainly rather than failing obscurely if the database is bare.
+
+## The page audit
+
+`npm run audit` is the only check here that opens a page in a real browser. Every
+other suite asks a server a question over HTTP and reads the answer; none of them
+can see a hydration mismatch, a Client Component that throws on mount, a chunk
+that 404s, a link that is only distinguishable by colour, or a page that jumps
+after it loads.
+
+It drives Chrome over all 48 route/role combinations and reports:
+
+| Kind | What it catches |
+| --- | --- |
+| `console-error`, `console-warn` | Anything logged by the page, including React's hydration mismatch |
+| `page-error` | An uncaught exception |
+| `request-failed`, `bad-response` | A dropped request, or any response at or above 400 |
+| `a11y:*` | axe-core, WCAG 2.0/2.1 A and AA |
+| `layout-shift` | Cumulative Layout Shift above the 0.1 "good" line |
+
+It needs the dev server running (for `/login` and `/register`) and a seeded
+database (for the `[id]` routes).
+
+Two things about it are load-bearing and easy to undo by accident:
+
+**It waits for `domcontentloaded` and then a fixed settle, not for network idle.**
+A page with a live map never goes idle — the basemap keeps pulling tiles and the
+socket stays open — so `networkidle2` timed out at 30s on two routes and reported
+`threw: Navigation timeout` as though the page were broken.
+
+**Its layout-shift observer is verified by `smoke:instrument`, which runs first in
+`smoke:all`.** That suite inserts a tall block into a real page and fails unless
+the audit's own instrumentation measures the shift (it lands at 0.292). This is
+not ceremony. The observer silently failed to attach for several iterations —
+esbuild's `keepNames` rewrites an inner arrow bound to a `const` into a
+`__name(fn, "name")` call, and `__name` does not exist in the browser — and the
+audit's response was to report a clean `0.000` on every route. A check that
+cannot fail is worse than no check, because it looks like evidence. The audit now
+also refuses to read a number unless the observer confirms it attached.
 
 ## Deploying
 
@@ -517,7 +558,7 @@ path-alias configuration here.
 
 Two layers, because they catch different things.
 
-**Unit tests** (`npm run test`, 392 assertions over 16 files) cover the logic
+**Unit tests** (`npm run test`, 410 assertions over 17 files) cover the logic
 where a bug is invisible from the outside: GPS acceptance, ETA parsing, stop
 ordering, freshness decay, CSV escaping, route-movement maths, trip liveness,
 and health classification. These modules deliberately import nothing from the
@@ -525,12 +566,13 @@ database, the network or the DOM, which is what makes them testable at all — a
 is why they use relative sibling imports rather than `@/lib/...`, because Vitest
 has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 250 checks over seven suites) run against a
+**Smoke suites** (`npm run smoke:all`, 255 checks over eight suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
 | Suite               | Checks | Covers                                                       |
 | ------------------- | -----: | ------------------------------------------------------------ |
+| `smoke:instrument`  |      4 | The page audit's layout-shift observer really fires           |
 | `smoke`             |      3 | Socket handshake: anonymous refused, valid cookie accepted, forged cookie refused |
 | `smoke:auth`        |     23 | Every role can log in and its dashboard renders with data; forged cookies refused; sign-in throttling, per account and across a run of failures |
 | `smoke:admin`       |     48 | CRUD, referential guards, trip lifecycle, attendance reports  |
@@ -538,6 +580,10 @@ authorization bugs, and those only appear when a real session meets a real row:
 | `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
 | `smoke:boundaries`  |     51 | 28 pages requested anonymously, a 4×4 role matrix, deep links, forged cookies, the API |
 | `smoke:pagination`  |     19 | Counts against the database, page two disjoint from page one, clamping, filters surviving paging |
+
+**The page audit** (`npm run audit`) is the third layer and the only one that
+opens a page in a browser. It is described under [The page audit](#the-page-audit)
+above.
 
 The suites find real bugs, which is the entire reason they exist. `smoke:admin`
 found five on its first run, and `smoke:tracking` found one immediately:

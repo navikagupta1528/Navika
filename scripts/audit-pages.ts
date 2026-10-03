@@ -199,9 +199,12 @@ async function signIn(page: Page, email: string) {
 /**
  * Visit one route and collect everything.
  *
- * Waits for `networkidle2` rather than `load` because most of the interesting
- * failures here - a chunk that 404s, an aborted request, an effect that throws -
- * happen *after* load, and a load-event snapshot would report a clean page.
+ * Waits for `domcontentloaded` and then for a fixed settle, rather than for
+ * `load` or for `networkidle2`. Both of those were tried and both were wrong:
+ * `load` fires before the Client Components that matter have mounted, and
+ * `networkidle2` never arrives on a page with a live map, because the basemap
+ * keeps pulling tiles and the socket stays open. A snapshot taken at either of
+ * those moments either calls a broken page clean or calls a healthy page broken.
  */
 async function visit(page: Page, route: string, role: string) {
   const consoleErrors: string[] = [];
@@ -238,43 +241,95 @@ async function visit(page: Page, route: string, role: string) {
   page.on("requestfailed", onRequestFailed);
   page.on("response", onResponse);
 
+  // The layout-shift observer lives in `main`, installed once per page. See the
+  // note there: registering it per visit multiplied every total by the number of
+  // routes already audited, which made three clean pages look broken.
+
   const started = Date.now();
   let status: number | null = null;
   try {
     const res = await page.goto(`${BASE}${route}`, {
-      waitUntil: "networkidle2",
+      /*
+       * `domcontentloaded`, deliberately, and this was a real fix rather than a
+       * speed-up.
+       *
+       * `networkidle2` waits for the network to fall quiet for 500ms, which a map
+       * page never lets happen: the basemap keeps fetching tiles, the live socket
+       * stays open, and the driver panel keeps polling. Two of the audited routes
+       * were timing out at 30s for that reason alone and reporting "threw:
+       * Navigation timeout" as though the page were broken.
+       *
+       * What the wait was buying was "client effects have run", and the explicit
+       * settle below buys that more honestly - it is a fixed delay rather than a
+       * proxy that a page with a live map can never satisfy.
+       */
+      waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
     status = res?.status() ?? null;
-    // Give client effects a beat to run and fail. A hydration mismatch or a
-    // throwing effect logs after the load event, not during it.
+
+    /*
+     * Refuse to report a layout-shift number unless the observer is alive.
+     *
+     * Checked *after* the navigation, because the flag is set by a script that runs
+     * in the new document before its first script - reading it before `goto` would
+     * be reading the previous page, or `about:blank`.
+     *
+     * `__clsAttached` becomes true the moment `observe()` succeeds. If it is false
+     * the instrument failed to plug in - which is exactly what happened while the
+     * callback was being transpiled by esbuild - and every `__cls` read below is a
+     * silent 0. A silent zero reads as a clean page, so a broken instrument has to
+     * be louder than the thing it is meant to detect.
+     */
+    const instrument = await page.evaluate(() => {
+      const w = window as unknown as { __clsAttached?: boolean; __clsError?: string };
+      return { attached: w.__clsAttached === true, error: w.__clsError ?? null };
+    });
+    if (!instrument.attached) {
+      throw new Error(
+        `the layout-shift observer did not attach on ${route} [${role}], so its CLS reading would be a ` +
+          `meaningless zero (${instrument.error ?? "no error reported"})`,
+      );
+    }
+
+    /*
+     * Give client effects a beat to run and fail. A hydration mismatch or a
+     * throwing effect logs after the load event, not during it.
+     */
     await new Promise((r) => setTimeout(r, 600));
 
-    // Layout shift, measured live. A jumping page is not an error, but it is the
-    // thing that makes a dashboard feel cheap, so it is worth seeing the numbers.
+    // Layout shift so far. A jumping page is not an error, but it is what makes a
+    // dashboard feel cheap, so the number is worth seeing. Read before the settle
+    // so it can be reported alongside the final figure.
     const cls = await page.evaluate(
-      () =>
-        new Promise<number>((resolve) => {
-          let total = 0;
-          try {
-            const po = new PerformanceObserver((list) => {
-              for (const entry of list.getEntries()) {
-                const e = entry as PerformanceEntry & { value?: number; hadRecentInput?: boolean };
-                if (!e.hadRecentInput) total += e.value ?? 0;
-              }
-            });
-            po.observe({ type: "layout-shift", buffered: true });
-            setTimeout(() => {
-              po.disconnect();
-              resolve(total);
-            }, 700);
-          } catch {
-            resolve(0);
-          }
-        }),
+      () => (window as unknown as { __cls: number }).__cls ?? 0,
     );
-    if (cls > 0.1) {
-      add(route, role, "layout-shift", `CLS ${cls.toFixed(3)} (over the 0.1 "good" line)`);
+
+    /*
+     * Settle before measuring or scanning.
+     *
+     * Everything interesting happens after load: a Client Component mounts, an
+     * effect fetches, a map initialises. Scanning at `domcontentloaded` would
+     * report a page that has not finished arriving and call it clean.
+     *
+     * 1.2s, and fixed. A conditional "wait for a network-idle signal" is what
+     * produced the timeouts above; a page with a live map never goes idle, so
+     * there is nothing to condition on.
+     */
+    await new Promise((r) => setTimeout(r, 1_200));
+
+    // Read again now that the page has settled, or the scan measures the shell.
+    const settledCls = await page.evaluate(
+      () => (window as unknown as { __cls: number }).__cls ?? 0,
+    );
+
+    if (settledCls > 0.1) {
+      add(
+        route,
+        role,
+        "layout-shift",
+        `CLS ${settledCls.toFixed(3)} (over the 0.1 "good" line; ${cls.toFixed(3)} by load)`,
+      );
     }
 
     // axe-core, injected as a script tag and run against the live DOM.
@@ -348,6 +403,56 @@ async function main() {
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+
+    /*
+     * The layout-shift observer is installed ONCE, here, and not per visit.
+     *
+     * `evaluateOnNewDocument` is cumulative: every call adds another script that
+     * runs before each subsequent navigation, and nothing removes it. Registering
+     * it inside `visit()` meant that by the fortieth route there were forty
+     * observers, each summing into the same `window.__cls` - so the reported total
+     * was the real shift multiplied by however many times the page had been
+     * visited before. A page scoring 0.391 was really shifting 0.008, and the
+     * three routes that "failed" were simply the last three visited.
+     *
+     * One observer per page, plus `buffered: true`, gives every navigation a full
+     * account of its own shifts without any multiplication.
+     *
+     * Two rules for the callback body, both learned by the instrument silently
+     * failing and reporting a clean 0.000 for every route:
+     *
+     * 1. Do not bind an inner function to a `const`. This file is run through tsx,
+     *    which transpiles with esbuild's `keepNames`, and that rewrites
+     *    `const add = () => {}` into `const add = __name(() => {}, "add")`.
+     *    `__name` is a build-time helper that does not exist in the browser, so the
+     *    callback throws `__name is not defined` at that line - before it reaches
+     *    anything. An arrow passed straight into a call is left alone and works.
+     *
+     * 2. The `{ content: "..." }` form of this API is unusable here: every variant
+     *    of it produces `Unexpected identifier 'Object'` in the page, so it is not a
+     *    way to dodge the transpiler. The function form is the one that works.
+     *
+     * Neither failure reports a console error or a page error that the collector
+     * would notice, which is why the guard in `visit()` now refuses to read a
+     * number unless `__clsAttached` says the observer really is running.
+     */
+    await page.evaluateOnNewDocument(() => {
+      const w = window as unknown as { __cls: number; __clsAttached: boolean; __clsError?: string };
+      w.__cls = 0;
+      w.__clsAttached = false;
+      try {
+        // Inline, not stored in a const: see rule 1 above.
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            const e = entry as PerformanceEntry & { value?: number; hadRecentInput?: boolean };
+            if (!e.hadRecentInput) w.__cls += e.value ?? 0;
+          }
+        }).observe({ type: "layout-shift", buffered: true });
+        w.__clsAttached = true;
+      } catch (err) {
+        w.__clsError = String(err);
+      }
+    });
 
     for (const route of PUBLIC) await visit(page, route, "ANONYMOUS");
 
