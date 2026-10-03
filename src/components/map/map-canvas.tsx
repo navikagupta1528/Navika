@@ -22,6 +22,7 @@ import {
   type LatLng,
 } from "@/lib/geo";
 import { DEFAULT_VIEWPORT, type MapStop, type RouteMapProps } from "./map-types";
+import { classifyMapError, mapFailureMessage, type MapFailure } from "@/lib/map-errors";
 import { mapWorkerUrl } from "@/lib/map-worker";
 
 /**
@@ -160,12 +161,30 @@ export default function MapCanvas({
   // nothing.
   const [support] = useState<WebGLSupport>(probeWebGL);
   const [ready, setReady] = useState(false);
-  const [styleFailed, setStyleFailed] = useState(false);
+  const [failure, setFailure] = useState<MapFailure>("none");
 
-  /** Report a failure after this commit finishes, never during it. */
-  const failLater = useCallback(() => {
-    queueMicrotask(() => setStyleFailed(true));
+  /**
+   * Report a failure after this commit finishes, never during it.
+   *
+   * These are raised from inside MapLibre callbacks, which can fire while React
+   * is rendering - a tile error during the commit that mounted the map would be
+   * a set-state-during-render, which React treats as a bug in this code rather
+   * than as a network event.
+   */
+  const reportFailure = useCallback((what: MapFailure) => {
+    queueMicrotask(() => setFailure(what));
   }, []);
+
+  /**
+   * Whether the underlying failure has already been logged.
+   *
+   * A public tile server 404s individual tiles routinely, so the error listener
+   * below sees a steady trickle of them. Logging each one would bury the first -
+   * the one that says why the map is empty - under a hundred that just say a
+   * tile was missing. Once is enough: after that the screen is already telling
+   * the user, and a repeat log line adds no new information.
+   */
+  const loggedFailureRef = useRef(false);
 
   /**
    * The stop currently being dragged.
@@ -269,17 +288,38 @@ export default function MapCanvas({
       // The probe said WebGL exists, so this is the unexpected case: a
       // driver that advertises support and then fails to initialise, or an
       // out-of-memory context. Report it rather than leaving a dead grey box.
-      failLater();
+      reportFailure("worker");
       return;
     }
 
     map.on("error", (event) => {
-      // Tile 404s and style hiccups are routine on a public tile server, and
-      // warning about each one would bury the real problems. Only the failure
-      // that leaves the user with an empty frame is worth surfacing.
-      if (/style|json|not found|failed to load/i.test(event.error?.message ?? "")) {
-        setStyleFailed(true);
+      /*
+       * Classify before deciding anything, and keep the original text.
+       *
+       * This used to test one regex - `/style|json|not found|failed to load/i` -
+       * against every error and show "the map tiles or style could not be
+       * loaded" when it matched. That regex also matches MapLibre's own worker
+       * failure, so an engine that would not start was reported to the user as a
+       * fault in somebody else's tile server, with the same confidence as if the
+       * two were the same thing. They are not: one is this page's code, the other
+       * is a third-party host, and they are fixed in different places.
+       *
+       * The fix is to know which half broke, and to keep the real text so that
+       * a report from a user carries evidence instead of a guess. It is logged
+       * once, because tile 404s are routine and a hundred of them would bury
+       * the first. In development Next forwards browser console output to the
+       * server log, so this is also how a failure gets diagnosed at all from
+       * someone else's machine.
+       */
+      const message = event.error?.message;
+      const what = classifyMapError(message);
+      if (what === "none") return;
+
+      if (!loggedFailureRef.current) {
+        loggedFailureRef.current = true;
+        console.error(`[map] ${what} failure:`, message ?? event.error);
       }
+      reportFailure(what);
     });
 
     // One popup for the whole map. A popup per marker would mean a dozen hidden
@@ -309,7 +349,7 @@ export default function MapCanvas({
     // Built once. Later effects apply every input, because rebuilding the map
     // to change its data throws away the user's pan, zoom and any drag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [support, failLater]);
+  }, [support, reportFailure]);
 
   // --- Initial framing ----------------------------------------------------
 
@@ -587,7 +627,19 @@ export default function MapCanvas({
   }, [usableVehicles, ready]);
 
   const hasContent = usableStops.length > 0 || usableVehicles.length > 0;
-  const unavailable = support === "unavailable" || styleFailed;
+  const unavailable = support === "unavailable" || failure !== "none";
+
+  /**
+   * Which half of the map broke, in the user's terms.
+   *
+   * WebGL is checked first because it is a *probe*, not a failure: it has already
+   * happened by the time this renders, and it is the one case where the answer
+   * is about the user's hardware rather than about anything this page did.
+   */
+  const unavailableReason =
+    support === "unavailable"
+      ? "This browser could not start WebGL. The tables on this page carry the same information."
+      : mapFailureMessage(failure);
 
   return (
     <div className={`relative overflow-hidden rounded-xl bg-slate-100 ${className ?? ""}`}>
@@ -601,11 +653,7 @@ export default function MapCanvas({
           className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-100 px-4 text-center"
         >
           <p className="text-sm font-medium text-slate-700">Map unavailable</p>
-          <p className="max-w-xs text-xs text-slate-500">
-            {support === "unavailable"
-              ? "This browser could not start WebGL. The tables on this page carry the same information."
-              : "The map tiles or style could not be loaded. The tables on this page carry the same information."}
-          </p>
+          <p className="max-w-xs text-xs text-slate-500">{unavailableReason}</p>
         </div>
       ) : null}
 

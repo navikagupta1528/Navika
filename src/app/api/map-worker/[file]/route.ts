@@ -31,15 +31,21 @@ import {
   resolveMapWorkerFile,
 } from "@/lib/map-worker";
 
-/**
- * Re-read the file on every request.
+/*
+ * No route segment config on purpose, and the omission is load-bearing.
  *
- * The alternative - letting Next cache the route - would bypass the conditional
- * GET below entirely, because a cached response is returned without the handler
- * running, so `If-None-Match` would never be looked at. Serving the file is a
- * single small read and the ETag keeps the wire cost at zero for repeat loads.
+ * Next does not cache route handlers by default - caching is something a `GET`
+ * handler opts into - so this one already runs on every request. That matters
+ * because of the conditional GET below: a cached response is returned without
+ * the handler running, so `If-None-Match` would never be examined and every
+ * reload would re-download 500 KB of shared chunk.
+ *
+ * Adding `export const dynamic = "force-dynamic"` would be the same behaviour
+ * stated twice, and it would misdescribe where the behaviour comes from - the
+ * default, not this directive. If caching is ever turned on globally, this route
+ * is the one that has to stay per-request, and the honest place to say so is a
+ * test rather than a comment that is already true.
  */
-export const dynamic = "force-dynamic";
 
 /**
  * The package's `dist` directory.
