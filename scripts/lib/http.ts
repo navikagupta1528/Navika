@@ -115,17 +115,37 @@ export type Session = {
   ) => Promise<{ status: number; html: string; location: string }>;
 };
 
+export type LoginAttempt = {
+  status: number;
+  /**
+   * The whole response, kept because a Server Action with no JavaScript to run it
+   * re-renders the page and the message a user would see is in the markup.
+   */
+  html: string;
+  /** Set only when the attempt actually authenticated. */
+  cookie: string;
+  /** The error the form displayed, or "" when there was none. */
+  message: string;
+};
+
 /**
- * Log in and return a session.
+ * Post the sign-in form once and report what happened.
  *
- * Fails loudly rather than returning an unauthenticated session, because every
- * assertion after a silent login failure is a 307 and the real cause is gone.
+ * Separate from `login` because "log in and throw if it failed" is the wrong
+ * shape for testing a *refusal*. A wrong password and a throttle are both
+ * outcomes worth asserting on, and a helper that can only return the happy path
+ * cannot express either.
+ *
+ * The response is a full re-rendered page rather than a JSON result: Next treats a
+ * form post with no `Next-Action` header as the no-JavaScript path and sends back
+ * the HTML a non-JS browser would get. That is the more useful thing to assert
+ * against anyway - it is the text a person is shown, not an internal shape.
  */
-export async function login(
+export async function attemptLogin(
   base: string,
   email: string,
-  password: string = DEMO_PASSWORD,
-): Promise<Session> {
+  password: string,
+): Promise<LoginAttempt> {
   const page = await fetch(`${base}/login`);
   const html = await page.text();
 
@@ -144,14 +164,38 @@ export async function login(
   });
 
   const issued = res.headers.getSetCookie?.() ?? [];
-  const session = issued.find((h) => h.startsWith(SESSION_COOKIE));
-  const cookie = session?.split(";")[0] ?? "";
-  if (!cookie) {
+  const cookie =
+    issued.find((h) => h.startsWith(SESSION_COOKIE))?.split(";")[0] ?? "";
+
+  const responseHtml = await res.text();
+  return {
+    status: res.status,
+    html: responseHtml,
+    cookie,
+    message: errorText(responseHtml),
+  };
+}
+
+/**
+ * Log in and return a session.
+ *
+ * Fails loudly rather than returning an unauthenticated session, because every
+ * assertion after a silent login failure is a 307 and the real cause is gone.
+ */
+export async function login(
+  base: string,
+  email: string,
+  password: string = DEMO_PASSWORD,
+): Promise<Session> {
+  const attempt = await attemptLogin(base, email, password);
+
+  if (!attempt.cookie) {
     throw new Error(
-      `login as ${email} did not set ${SESSION_COOKIE} (status ${res.status}). ` +
-        `Wrong password, or the seed data is missing.`,
+      `login as ${email} did not set ${SESSION_COOKIE} (status ${attempt.status}, ` +
+        `message "${attempt.message}"). Wrong password, or the seed data is missing.`,
     );
   }
+  const cookie = attempt.cookie;
 
   const fetchWithCookie = async (path: string, init?: RequestInit) =>
     fetch(`${base}${path}`, {

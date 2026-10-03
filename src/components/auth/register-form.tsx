@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { register, type AuthState } from "@/app/actions/auth";
+import { FieldError, FieldHint, describedBy } from "./field-error";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -25,8 +26,11 @@ export function RegisterForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      {/* See `login-form.tsx`: this is the only announcement a screen reader gets. */}
       {state?.message ? (
-        <p className="alert-error">{state.message}</p>
+        <p role="alert" className="alert-error">
+          {state.message}
+        </p>
       ) : null}
 
       <fieldset>
@@ -68,10 +72,16 @@ export function RegisterForm() {
         <label className="label" htmlFor="name">
           Full name
         </label>
-        <input id="name" name="name" required className="field" autoComplete="name" />
-        {err("name") ? (
-          <p className="mt-1 text-xs text-red-600">{err("name")}</p>
-        ) : null}
+        <input
+          id="name"
+          name="name"
+          required
+          className="field"
+          autoComplete="name"
+          aria-invalid={err("name") ? true : undefined}
+          aria-describedby={describedBy(err("name") ? "name-error" : undefined)}
+        />
+        <FieldError id="name-error" message={err("name")} />
       </div>
 
       <div>
@@ -85,10 +95,10 @@ export function RegisterForm() {
           required
           className="field"
           autoComplete="email"
+          aria-invalid={err("email") ? true : undefined}
+          aria-describedby={describedBy(err("email") ? "email-error" : undefined)}
         />
-        {err("email") ? (
-          <p className="mt-1 text-xs text-red-600">{err("email")}</p>
-        ) : null}
+        <FieldError id="email-error" message={err("email")} />
       </div>
 
       <div>
@@ -101,8 +111,10 @@ export function RegisterForm() {
           className="field"
           placeholder="+91 98765 43210"
           autoComplete="tel"
+          aria-invalid={err("phone") ? true : undefined}
+          aria-describedby={describedBy(err("phone") ? "phone-error" : undefined)}
         />
-        {err("phone") ? <p className="mt-1 text-xs text-red-600">{err("phone")}</p> : null}
+        <FieldError id="phone-error" message={err("phone")} />
       </div>
 
       {role === "STUDENT" ? (
@@ -117,10 +129,12 @@ export function RegisterForm() {
               required
               className="field"
               placeholder="CSE2026-0142"
+              aria-invalid={err("enrollmentNo") ? true : undefined}
+              aria-describedby={describedBy(
+                err("enrollmentNo") ? "enrollmentNo-error" : undefined,
+              )}
             />
-            {err("enrollmentNo") ? (
-              <p className="mt-1 text-xs text-red-600">{err("enrollmentNo")}</p>
-            ) : null}
+            <FieldError id="enrollmentNo-error" message={err("enrollmentNo")} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -161,14 +175,23 @@ export function RegisterForm() {
               required
               className="field"
               placeholder="CSE2026-0142"
+              aria-invalid={err("childEnrollmentNo") ? true : undefined}
+              aria-describedby={describedBy(
+                "childEnrollmentNo-hint",
+                err("childEnrollmentNo") ? "childEnrollmentNo-error" : undefined,
+              )}
             />
-            <p className="mt-1 text-xs text-slate-500">
+            {/*
+              The hint and the error are both named in `aria-describedby`, in that
+              order. Pointing at only one of them drops the other: naming the hint
+              alone leaves a screen reader user who cannot see the red line with no
+              idea the submission was rejected.
+            */}
+            <FieldHint id="childEnrollmentNo-hint">
               The student must already be registered. Contact the college
               office if this fails.
-            </p>
-            {err("childEnrollmentNo") ? (
-              <p className="mt-1 text-xs text-red-600">{err("childEnrollmentNo")}</p>
-            ) : null}
+            </FieldHint>
+            <FieldError id="childEnrollmentNo-error" message={err("childEnrollmentNo")} />
           </div>
           <div>
             <label className="label" htmlFor="relation">
@@ -194,13 +217,16 @@ export function RegisterForm() {
           required
           className="field"
           autoComplete="new-password"
+          aria-invalid={err("password") ? true : undefined}
+          aria-describedby={describedBy(
+            "password-hint",
+            err("password") ? "password-error" : undefined,
+          )}
         />
-        <p className="mt-1 text-xs text-slate-500">
+        <FieldHint id="password-hint">
           At least 8 characters, with a letter and a number.
-        </p>
-        {err("password") ? (
-          <p className="mt-1 text-xs text-red-600">{err("password")}</p>
-        ) : null}
+        </FieldHint>
+        <FieldError id="password-error" message={err("password")} />
       </div>
 
       <div>
@@ -214,10 +240,12 @@ export function RegisterForm() {
           required
           className="field"
           autoComplete="new-password"
+          aria-invalid={err("confirmPassword") ? true : undefined}
+          aria-describedby={describedBy(
+            err("confirmPassword") ? "confirmPassword-error" : undefined,
+          )}
         />
-        {err("confirmPassword") ? (
-          <p className="mt-1 text-xs text-red-600">{err("confirmPassword")}</p>
-        ) : null}
+        <FieldError id="confirmPassword-error" message={err("confirmPassword")} />
       </div>
 
       <SubmitButton />

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { login, type AuthState } from "@/app/actions/auth";
+import { FieldError, describedBy } from "./field-error";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -19,8 +20,17 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      {/*
+        role="alert" so a screen reader announces the refusal instead of the page
+        silently doing nothing. This is the single most important announcement in
+        the app: a wrong password and a throttle both arrive *only* after the user
+        acts, so there is no visual change for a screen reader to notice on its
+        own. See `field-error.tsx` for the wider fix.
+      */}
       {state?.message ? (
-        <p className="alert-error">{state.message}</p>
+        <p role="alert" className="alert-error">
+          {state.message}
+        </p>
       ) : null}
 
       <div>
@@ -35,10 +45,12 @@ export function LoginForm() {
           required
           placeholder="you@college.edu"
           className="field"
+          aria-invalid={state?.errors?.email?.[0] ? true : undefined}
+          aria-describedby={describedBy(
+            state?.errors?.email?.[0] ? "email-error" : undefined,
+          )}
         />
-        {state?.errors?.email?.[0] ? (
-          <p className="mt-1 text-xs text-red-600">{state.errors.email[0]}</p>
-        ) : null}
+        <FieldError id="email-error" message={state?.errors?.email?.[0]} />
       </div>
 
       <div>
@@ -52,10 +64,12 @@ export function LoginForm() {
           autoComplete="current-password"
           required
           className="field"
+          aria-invalid={state?.errors?.password?.[0] ? true : undefined}
+          aria-describedby={describedBy(
+            state?.errors?.password?.[0] ? "password-error" : undefined,
+          )}
         />
-        {state?.errors?.password?.[0] ? (
-          <p className="mt-1 text-xs text-red-600">{state.errors.password[0]}</p>
-        ) : null}
+        <FieldError id="password-error" message={state?.errors?.password?.[0]} />
       </div>
 
       <SubmitButton />

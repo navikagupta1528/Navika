@@ -14,7 +14,7 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 309 unit tests, 221 HTTP smoke
+Current state: **typecheck and lint clean, 364 unit tests, 231 HTTP smoke
 checks across six suites, Lighthouse 99 / 100 / 100 / 100 on both public
 pages, 36 routes building.**
 
@@ -23,6 +23,12 @@ pages, 36 routes building.**
 - Next.js 16 App Router, TypeScript, Tailwind v4
 - PostgreSQL 17 via Prisma 7, 18 models and 9 enums with real foreign keys
 - Session auth: httpOnly cookie, `jose` JWT, four roles
+- Sign-in and registration throttling, with the per-account and per-address
+  budgets deliberately on different schedules — see
+  [Sign-in throttling](#sign-in-throttling) for why making them equal would
+  lock out a whole school
+- Auth errors announced to assistive technology, with each message tied to its
+  field by `aria-describedby`
 - Role-gated dashboards for student, parent, driver and admin
 - Socket.IO attached to a custom Node server, with cookie-based handshake
 - Demo seed: 3 routes, 12 stops, 5 buses, 6 drivers, 40 students, 8 parents,
@@ -94,6 +100,63 @@ pages, 36 routes building.**
   after React has begun streaming — so an anonymous visitor received a 200
   carrying the app shell with the redirect arriving later as a meta-refresh tag.
   The proxy now answers before anything renders, making it a real 307.
+
+## Sign-in throttling
+
+Sign-in originally had no attempt limit. bcrypt at cost 12 makes an offline guess
+expensive and, incidentally, makes an online guess expensive for the defender —
+but *expensive per attempt* is not *bounded in total*. A script got one comparison
+per guess and could keep guessing forever against the system whose whole purpose
+is reporting where children are.
+
+**The trap.** Throttle on the submitted email and an attacker with no password
+needs nothing else: post wrong passwords for a known address a few times, and that
+student cannot sign in for the length of the window. The limiter becomes the
+weapon — no credentials, no access, no trace. Four things prevent it here. The
+window caps at fifteen minutes, because this app has no self-service unlock, so
+the window length *is* the worst case for someone targeted. A success clears the
+budget. The counter is keyed on the submitted address before the account is
+looked up, so "locked out" versus "incorrect password" reveals nothing about which
+addresses are registered — which is the student and guardian roster. And the two
+schedules are asymmetric.
+
+**Why the schedules differ.** Per account is strict: three free attempts, then an
+escalating table up to fifteen minutes. That is what bounds an attacker's exposure
+of any one password. Per address is lenient: twenty-five free attempts.
+
+That number is set by who is behind the address, not by the attacker. A college
+runs every sign-in through one NAT address, and at two thousand students a
+fifteen-minute window on a weekday morning comfortably exceeds a dozen mistyped
+passwords behind it. A strict per-IP limit defends nothing there — it is the
+denial of service above, aimed at the whole school at 8:40am, triggerable by
+anyone who can type three wrong passwords. Twenty-five is above the plausible
+human floor and still low enough that a script cannot reach a meaningful number
+of accounts in one window; and because the per-account limit stays strict
+regardless, raising the address ceiling buys a *spray*, not a breach.
+
+Registration is throttled on its own budgets, for the same NAT reason one flow
+over: an office creating accounts all morning must not lock out the students
+behind the same address. It is also what bounds account enumeration, since the
+form has to say whether an address is taken and enrollment numbers are sequential.
+
+Counters live in the Node process. For this single-instance deployment a redeploy
+clearing them is the behaviour you want — nobody should be locked out because a
+deploy landed at the wrong minute — and a restart is a brief amnesty. That trade
+would not hold on a multi-instance deployment, where this would need the same
+shared store as everything else.
+
+Two defects surfaced while writing the tests, both of which looked correct:
+
+- An off-by-one in both tables. The schedule is indexed by the failure count
+  *including* the one just recorded, so a leading run of 25 zeros grants 24 free
+  attempts, not 25 — while reading as twenty-five. It was wrong the same way
+  twice before a test compared the table against the number it advertises.
+- `!Number.isFinite(failures) → 0`, which reads as caution and quietly maps a
+  positive infinity to *no penalty* — handing over the exact unbounded run the
+  function exists to prevent. `NaN` now answers 0 and infinity clamps.
+
+34 unit tests cover the schedule; 10 smoke checks cover the wiring, by posting the
+real sign-in form.
 
 ## Stack
 
@@ -348,6 +411,8 @@ src/
     session.ts           cookie read/write (Next.js side)
     dal.ts               authorization: requireSession, requireRole
     api-auth.ts          API-side guard, returns 401/403 not a redirect
+    login-throttle.ts    attempt budgets and backoff, pure, no ambient clock
+    login-guard.ts       the one live store, and where a request's IP comes from
     queries.ts           scoped read helpers
     day-window.ts        "today" as one half-open local range, pure
     geo.ts               haversine, bearing, ETA fallback
@@ -390,7 +455,7 @@ path-alias configuration here.
 
 Two layers, because they catch different things.
 
-**Unit tests** (`npm run test`, 309 assertions over 12 files) cover the logic
+**Unit tests** (`npm run test`, 364 assertions over 15 files) cover the logic
 where a bug is invisible from the outside: GPS acceptance, ETA parsing, stop
 ordering, freshness decay, CSV escaping, route-movement maths, trip liveness,
 and health classification. These modules deliberately import nothing from the
@@ -398,14 +463,14 @@ database, the network or the DOM, which is what makes them testable at all — a
 is why they use relative sibling imports rather than `@/lib/...`, because Vitest
 has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 221 checks over six suites) run against a
+**Smoke suites** (`npm run smoke:all`, 231 checks over six suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
 | Suite               | Checks | Covers                                                       |
 | ------------------- | -----: | ------------------------------------------------------------ |
 | `smoke`             |      3 | Socket handshake: anonymous refused, valid cookie accepted, forged cookie refused |
-| `smoke:auth`        |     13 | Every role can log in and its dashboard renders with data      |
+| `smoke:auth`        |     23 | Every role can log in and its dashboard renders with data; forged cookies refused; sign-in throttling, per account and across a run of failures |
 | `smoke:admin`       |     48 | CRUD, referential guards, trip lifecycle, attendance reports  |
 | `smoke:tracking`    |     96 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
 | `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
@@ -428,11 +493,15 @@ so a fixture that looks abandoned on inspection is not.
 
 Three limits worth stating plainly:
 
-- Server Actions called from client components cannot be HTTP-tested. Next 16
-  renders them as plain forms with hidden `$ACTION_*` inputs, and the
-  `Next-Action` id is a build artifact. Those write paths are covered by calling
-  the underlying core directly, which is why the cores take an explicit
-  `Actor` and live outside the request scope.
+- An action's id is a build artifact, so a test cannot hardcode it — but it is not
+  hidden. Next 16 renders the action as a plain form whose `$ACTION_*` fields are in
+  the page HTML, so `scripts/lib/http.ts` scrapes the id off the live page and posts
+  exactly those fields back. This README previously claimed these write paths were
+  untestable over HTTP; that was wrong, and asserting it wrong is what hid a real
+  accessibility bug. `smoke:auth` now posts the sign-in form to prove the throttle
+  is wired, and it can only read the response because the auth forms finally carry
+  `role="alert"` — the error text it needs was in the markup all along, just not
+  announced and not labelled. See `src/components/auth/field-error.tsx`.
 - No browser automation is wired up, so nothing here verifies pixels. The smoke
   suites check copy and authorization, not layout. Lighthouse scores the public
   pages but does not click anything either.
