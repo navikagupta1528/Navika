@@ -22,6 +22,7 @@ import {
   type LatLng,
 } from "@/lib/geo";
 import { DEFAULT_VIEWPORT, type MapStop, type RouteMapProps } from "./map-types";
+import { mapWorkerUrl } from "@/lib/map-worker";
 
 /**
  * The MapLibre canvas.
@@ -43,53 +44,30 @@ const LINE_LAYER_ID = "navika-route-line";
 const LINE_CASING_LAYER_ID = "navika-route-line-casing";
 
 /*
- * Point MapLibre at the worker the bundler actually emitted.
+ * Point MapLibre at a worker that actually loads.
  *
- * MapLibre finds its worker with this:
+ * The short version, because the long version is in `src/lib/map-worker.ts`:
+ * MapLibre finds its worker as a sibling of its own module URL, which no
+ * bundler preserves, and pointing it at the hashed asset the bundler emitted
+ * only fixes half the problem - that asset's own `import "./maplibre-gl-shared.mjs"`
+ * still 404s, because the shared chunk was hashed under a different name.
  *
- *   function workerUrl() {
- *     const self = import.meta.url;
- *     if (!/^https?:/.test(self)) return "";
- *     const file = self.endsWith("-dev.mjs") ? "maplibre-gl-worker-dev.mjs"
- *                                          : "maplibre-gl-worker.mjs";
- *     return new URL(`./${file}`, self).href;
- *   }
+ * `/api/map-worker` serves the pair from the installed package as one directory,
+ * so the relative import resolves exactly as MapLibre expects.
  *
- * That computes `./maplibre-gl-worker.mjs` relative to *this module's* URL. The
- * assumption is that a library and its worker are siblings on the same server
- * path, which is true when the two are copied out of a package directory
- * together and false the moment a bundler is involved.
- *
- * Under Turbopack they are not siblings. The bundler does read that
- * `new URL(...)` call and does emit the file — it lands in
- * `/_next/static/media/maplibre-gl-worker.<hash>.mjs`, with a content hash and
- * no relation to the chunk's own directory. The runtime string concatenation
- * above resolves to `/_next/static/chunks/maplibre-gl-worker.mjs`, which is not
- * that file. So the worker 404s and the console reports, accurately but
- * uselessly:
- *
- *   Worker failed to load. Check that the worker URL is correct.
- *
- * Nothing else tells you the URL was derived from a chunk path rather than
- * configured, which is why this reads as a MapLibre problem instead of a
- * bundler one.
- *
- * `setWorkerUrl` is MapLibre's own override for exactly this, and it is checked
- * before the derivation above, so naming the asset ourselves is using the
- * supported path rather than patching around it. Written as a bare module
- * request inside `new URL(...)` so Turbopack statically rewrites it to the same
- * hashed file it already emits, and so a MapLibre upgrade moves this reference
- * on its own.
+ * `process.env.NODE_ENV` rather than a constant, to pick the unminified worker
+ * in development the way MapLibre does for itself.
  *
  * Safe at module scope: `RouteMap` reaches this file through
  * `next/dynamic({ ssr: false })` and nothing else imports it, so this never
- * runs on the server where `import.meta.url` would be a filesystem path.
+ * runs on the server.
  *
- * Without a worker, MapLibre does not draw tiles at all — the map renders as an
- * empty canvas with no error on screen, which is the worst possible failure for
- * the main screen of a tracking product.
+ * Without a worker, MapLibre draws no tiles at all - an empty canvas rather than
+ * an error on screen, which is the worst possible failure for the main screen of
+ * a tracking product. The console message it does print says the worker URL is
+ * wrong, which is a statement about this line and not about the URL.
  */
-setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).href);
+setWorkerUrl(mapWorkerUrl(process.env.NODE_ENV !== "production"));
 
 /**
  * OpenStreetMap raster tiles, as an inline style.
