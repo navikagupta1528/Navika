@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
-import { listTrips, listBuses, listDrivers } from "@/lib/admin/queries";
+import { countTripsByStatus, listTrips, listBuses, listDrivers } from "@/lib/admin/queries";
 import { Role } from "@/generated/prisma/enums";
 import { PageHeader } from "@/components/portal/portal-shell";
+import { Pagination } from "@/components/portal/pagination";
 import { Card, CardTitle, Badge, StatTile, EmptyState } from "@/components/ui/primitives";
 import { EntityForm } from "@/components/admin/entity-form";
 import { ActionForm } from "@/components/admin/action-form";
@@ -42,27 +43,29 @@ function delayLabel(seconds: number | null): string | null {
 export default async function TripsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; status?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    status?: string;
+    page?: string | string[];
+  }>;
 }) {
   await requireRole(Role.ADMIN);
-  const { date, status } = await searchParams;
+  const { date, status, page: rawPage } = await searchParams;
 
   const activeDate = date ?? todayIso();
-  const [trips, buses, drivers] = await Promise.all([
-    listTrips({ date: activeDate, status: status || undefined }),
+  const [list, buses, drivers, counts] = await Promise.all([
+    listTrips({ date: activeDate, status: status || undefined, page: rawPage }),
     listBuses(),
     listDrivers(),
+    // Counted over the whole day, not summed from the page - see the note on
+    // `countTripsByStatus`.
+    countTripsByStatus(activeDate),
   ]);
+
+  const { trips, page } = list;
 
   const scheduled = buses.filter((b) => b.status === "ACTIVE" && b.routeId);
   const activeDrivers = drivers.filter((d) => d.isActive && d.profile);
-
-  const counts = {
-    scheduled: trips.filter((t) => t.status === "SCHEDULED").length,
-    ongoing: trips.filter((t) => t.status === "ONGOING").length,
-    completed: trips.filter((t) => t.status === "COMPLETED").length,
-    cancelled: trips.filter((t) => t.status === "CANCELLED").length,
-  };
 
   const STATUS_FILTERS = [
     { value: "", label: "All" },
@@ -81,17 +84,17 @@ export default async function TripsPage({
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Scheduled" value={counts.scheduled} tone="blue" />
+          <StatTile label="Scheduled" value={counts.SCHEDULED} tone="blue" />
           <StatTile
             label="On the road"
-            value={counts.ongoing}
-            tone={counts.ongoing > 0 ? "emerald" : "slate"}
+            value={counts.ONGOING}
+            tone={counts.ONGOING > 0 ? "emerald" : "slate"}
           />
-          <StatTile label="Completed" value={counts.completed} />
+          <StatTile label="Completed" value={counts.COMPLETED} />
           <StatTile
             label="Cancelled"
-            value={counts.cancelled}
-            tone={counts.cancelled > 0 ? "red" : "slate"}
+            value={counts.CANCELLED}
+            tone={counts.CANCELLED > 0 ? "red" : "slate"}
           />
         </div>
 
@@ -307,6 +310,12 @@ export default async function TripsPage({
               </table>
             </div>
           )}
+
+          <Pagination
+            page={page}
+            basePath="/admin/trips"
+            params={{ date: activeDate, status }}
+          />
         </Card>
       </div>
     </>

@@ -23,10 +23,11 @@
     "smoke:tracking": "tsx --conditions=react-server scripts/smoke-tracking.ts",
     "smoke:reconcile": "tsx --conditions=react-server scripts/smoke-reconcile.ts",
     "smoke:boundaries": "tsx scripts/smoke-boundaries.ts",
+    "smoke:pagination": "tsx --conditions=react-server scripts/smoke-pagination.ts",
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
-    "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin && npm run smoke:tracking && npm run smoke:reconcile && npm run smoke:boundaries",
+    "smoke:all": "npm run smoke && npm run smoke:auth && npm run smoke:admin && npm run smoke:tracking && npm run smoke:reconcile && npm run smoke:boundaries && npm run smoke:pagination",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "lighthouse": "node scripts/lighthouse.mjs"
   },

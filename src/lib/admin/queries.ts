@@ -1,5 +1,9 @@
 import "server-only";
+import { Prisma } from "@/generated/prisma/client";
+import { AlertStatus, TripStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
+import { paged } from "@/lib/paged-query";
+import type { RawPage } from "@/lib/pagination";
 
 /**
  * List queries behind the admin screens.
@@ -235,7 +239,7 @@ export async function getBus(id: string) {
        * Active enrolments only.
        *
        * A filtered relation count, which is both what the "Enrolled" figure
-       * should show — an ended assignment is history, not a seat held — and
+       * should show â€” an ended assignment is history, not a seat held â€” and
        * exactly the predicate `deleteBus` uses to decide whether removal is
        * allowed.
        */
@@ -346,75 +350,125 @@ export async function getDriver(id: string) {
 }
 
 /**
- * Every student with their current assignment, for the enrolment screen.
- * Left-joined so unenrolled students still appear — they are exactly the rows
- * an admin needs to fix.
+ * The student list, searched and paged in the database.
+ *
+ * This used to fetch every student with every enrolment and every guardian
+ * attached, then filter the lot in JavaScript. At forty students that is free; at
+ * two thousand it is a page that loads the whole school to show twenty-five rows,
+ * and the search has to wait for all of it before anything appears.
+ *
+ * Three things moved into SQL, and one of them is a behaviour change worth naming:
+ *
+ * - **Search.** A term is matched against name, email, enrollment number and
+ *   department. It used to be matched against those four joined with spaces, which
+ *   also matched a term *spanning* fields - `"aarav sharma@navika"` would hit a
+ *   student whose name and email happened to concatenate that way. Nobody types
+ *   that on purpose, and it made results depend on field order.
+ * - **Counting.** The tiles used to be computed from the fetched array, so they
+ *   could only ever describe what had been loaded. They are real counts now, over
+ *   the same filter as the rows, so they agree with the pager.
+ * - **The ended-assignments lookup.** This fetched every ended enrolment in the
+ *   database to show at most three per student on the page. It is now scoped to
+ *   the students actually on this page.
  */
-export async function listStudents() {
-  const [students, endedRows] = await Promise.all([
-    prisma.studentProfile.findMany({
-      orderBy: { enrollmentNo: "asc" },
-      select: {
-        id: true,
-        enrollmentNo: true,
-        department: true,
-        yearOfStudy: true,
-        user: {
-          select: { id: true, name: true, email: true, phone: true, isActive: true },
+export async function listStudents(filter?: { q?: string; page?: RawPage }) {
+  const term = filter?.q?.trim() ?? "";
+  const where: Prisma.StudentProfileWhereInput = term
+    ? {
+        OR: [
+          { enrollmentNo: { contains: term, mode: "insensitive" } },
+          { department: { contains: term, mode: "insensitive" } },
+          { user: { name: { contains: term, mode: "insensitive" } } },
+          { user: { email: { contains: term, mode: "insensitive" } } },
+        ],
+      }
+    : {};
+
+  /** Students matching the filter who have no active assignment. */
+  const unassignedWhere: Prisma.StudentProfileWhereInput = {
+    AND: [where, { enrollments: { none: { isActive: true } } }],
+  };
+  /** Students matching the filter who have no guardian linked at all. */
+  const noParentWhere: Prisma.StudentProfileWhereInput = {
+    AND: [where, { guardians: { none: {} } }],
+  };
+
+  const [pagedStudents, unassigned, noParentTotal, noParentNames, needsAssignment, endedRows] =
+    await Promise.all([
+      paged({
+        raw: filter?.page,
+        perPage: 25,
+        count: () => prisma.studentProfile.count({ where }),
+        rows: ({ skip, take }) =>
+          prisma.studentProfile.findMany({
+            where,
+            // `enrollmentNo` is unique in practice but not in the schema, so `id`
+            // breaks the tie - see `withIdOrder` for why that is not optional.
+            orderBy: [{ enrollmentNo: "asc" }, { id: "asc" }],
+            skip,
+            take,
+            select: STUDENT_ROW_SELECT,
+          }),
+      }),
+
+      prisma.studentProfile.count({ where: unassignedWhere }),
+      prisma.studentProfile.count({ where: noParentWhere }),
+
+      /*
+       * Names for the warning banner, capped at eight.
+       *
+       * A separate query rather than a slice of the page's rows, because the
+       * banner is about the whole filtered set while the page holds twenty-five of
+       * them - slicing the page would name students who are not on screen and hide
+       * ones that are.
+       */
+      prisma.studentProfile.findMany({
+        where: noParentWhere,
+        orderBy: [{ enrollmentNo: "asc" }, { id: "asc" }],
+        take: 8,
+        select: { id: true, user: { select: { name: true } } },
+      }),
+
+      /*
+       * Students needing an assignment, for the shortcut card below the list.
+       *
+       * The one place that legitimately wants a capped list rather than a page: it
+       * is a shortcut panel, not a result set. Capped at forty with the true
+       * `unassigned` count beside it, so "and 12 more" stays honest - which is what
+       * the card already did, from an array that happened to hold everyone.
+       */
+      prisma.studentProfile.findMany({
+        where: unassignedWhere,
+        orderBy: [{ enrollmentNo: "asc" }, { id: "asc" }],
+        take: 40,
+        select: { id: true, enrollmentNo: true, user: { select: { name: true } } },
+      }),
+
+      /**
+       * Ended assignments, fetched separately and merged in below.
+       *
+       * Prisma cannot select the same relation twice under two keys, and an ended
+       * row still holds its unique key â€” so the admin has to be able to see that
+       * "that assignment already exists" is not a bug, and restore it in one
+       * click. Capped per student because this is context, not the main list.
+       *
+       * Scoped to the students on this page: the query used to take every ended
+       * row in the database and then discard all but three per student.
+       */
+      prisma.enrollment.findMany({
+        where: { isActive: false },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          direction: true,
+          academicYear: true,
+          updatedAt: true,
+          stop: { select: { name: true } },
+          bus: { select: { id: true, busNumber: true } },
         },
-        enrollments: {
-          where: { isActive: true },
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            direction: true,
-            academicYear: true,
-            stop: { select: { id: true, name: true } },
-            bus: {
-              select: {
-                id: true,
-                busNumber: true,
-                registrationNo: true,
-                route: { select: { id: true, name: true } },
-              },
-            },
-          },
-        },
-        guardians: {
-          select: {
-            parent: {
-              select: {
-                id: true,
-                relation: true,
-                user: { select: { name: true, email: true, phone: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    /**
-     * Ended assignments, fetched separately and merged in below.
-     *
-     * Prisma cannot select the same relation twice under two keys, and an ended
-     * row still holds its unique key — so the admin has to be able to see that
-     * "that assignment already exists" is not a bug, and restore it in one
-     * click. Capped per student because this is context, not the main list.
-     */
-    prisma.enrollment.findMany({
-      where: { isActive: false },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        studentId: true,
-        direction: true,
-        academicYear: true,
-        updatedAt: true,
-        stop: { select: { name: true } },
-        bus: { select: { id: true, busNumber: true } },
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   const endedByStudent = new Map<string, typeof endedRows>();
   for (const row of endedRows) {
@@ -423,15 +477,124 @@ export async function listStudents() {
     else if (bucket.length < 3) bucket.push(row);
   }
 
-  return students.map((s) => ({
-    ...s,
-    guardianCount: s.guardians.length,
-    guardians: s.guardians.map((g) => g.parent),
-    endedEnrollments: endedByStudent.get(s.id) ?? [],
-  }));
+  return {
+    students: pagedStudents.rows.map((s) => ({
+      ...s,
+      guardianCount: s.guardians.length,
+      guardians: s.guardians.map((g) => g.parent),
+      endedEnrollments: endedByStudent.get(s.id) ?? [],
+    })),
+    /** The pager's window, already clamped. */
+    page: pagedStudents.page,
+    /** True counts over the same filter as the rows, for the tiles. */
+    counts: {
+      /** Total matching the filter. Identical to the pager's total, on purpose. */
+      total: pagedStudents.page.total,
+      assigned: pagedStudents.page.total - unassigned,
+      unassigned,
+      noParent: noParentTotal,
+      /**
+       * Active enrolments belonging to students matching the filter.
+       *
+       * Counted rather than summed over the page's rows, which is what this used
+       * to do - a tile reading "Assignments 25" on a paged list of forty-two
+       * students is not a count, it is the page size.
+       */
+      assignments: await prisma.enrollment.count({
+        where: { isActive: true, student: where },
+      }),
+    },
+    /** Up to eight names for the unlinked-guardian warning. */
+    noParentNames: noParentNames.map((s) => s.user.name),
+    /** Up to forty students with no active assignment, for the shortcut card. */
+    needsAssignment,
+  };
 }
 
-export type StudentRow = Awaited<ReturnType<typeof listStudents>>[number];
+/**
+ * One student for the edit form, looked up by id.
+ *
+ * This existed as a `find` over the list, which is only correct while the list
+ * holds every student. The moment it is paged, `?edit=<id>` for someone on page 4
+ * silently renders the "new assignment" form instead - the link works, the page
+ * loads, and the wrong form is on it.
+ */
+export async function getStudentForEdit(id: string) {
+  const student = await prisma.studentProfile.findUnique({
+    where: { id },
+    select: STUDENT_ROW_SELECT,
+  });
+  if (!student) return null;
+
+  const endedRows = await prisma.enrollment.findMany({
+    where: { isActive: false, studentId: id },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      studentId: true,
+      direction: true,
+      academicYear: true,
+      updatedAt: true,
+      stop: { select: { name: true } },
+      bus: { select: { id: true, busNumber: true } },
+    },
+  });
+
+  return {
+    ...student,
+    guardianCount: student.guardians.length,
+    guardians: student.guardians.map((g) => g.parent),
+    endedEnrollments: endedRows.slice(0, 3),
+  };
+}
+
+/**
+ * The columns the list and the edit form both need.
+ *
+ * One definition, because the two were reading the same relations and drifting:
+ * the form needs an assignment's bus and stop to prefill, and a silently missing
+ * relation here shows up as an empty dropdown rather than an error.
+ */
+const STUDENT_ROW_SELECT = {
+  id: true,
+  enrollmentNo: true,
+  department: true,
+  yearOfStudy: true,
+  user: {
+    select: { id: true, name: true, email: true, phone: true, isActive: true },
+  },
+  enrollments: {
+    where: { isActive: true },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      direction: true,
+      academicYear: true,
+      stop: { select: { id: true, name: true } },
+      bus: {
+        select: {
+          id: true,
+          busNumber: true,
+          registrationNo: true,
+          route: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
+  guardians: {
+    select: {
+      parent: {
+        select: {
+          id: true,
+          relation: true,
+          user: { select: { name: true, email: true, phone: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.StudentProfileSelect;
+
+export type StudentRow = Awaited<ReturnType<typeof getStudentForEdit>>;
 
 export async function listEnrollments() {
   return prisma.enrollment.findMany({
@@ -504,52 +667,117 @@ export async function getBusLoads() {
   });
 }
 
-export async function listTrips(filter?: { date?: string; status?: string }) {
-  const dateFilter = filter?.date
-    ? (() => {
-        // Parse as a local calendar date, not UTC midnight, or a trip recorded
-        // in the evening lands on the previous day.
-        const [y, m, d] = filter.date!.split("-").map(Number);
-        const start = new Date(y, m - 1, d);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-        return { gte: start, lt: end };
-      })()
-    : undefined;
+/**
+ * The half-open range covering one local calendar day.
+ *
+ * Parsed as a local date, not UTC midnight: a trip recorded at 7:40 in the evening
+ * belongs to that day where the bus actually was, and `new Date("2026-10-03")`
+ * would file it under the previous one for anyone east of Greenwich.
+ *
+ * One function, because the list and the tile counts have to agree on which rows
+ * belong to the day. A tile counting UTC-midnight-to-UTC-midnight against a list
+ * counting local midnight would disagree by a few rows at the edges, and the
+ * disagreement would look like missing trips.
+ */
+function localDay(date?: string): { gte: Date; lt: Date } | undefined {
+  if (!date) return undefined;
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return undefined;
+  const start = new Date(y, m - 1, d);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { gte: start, lt: end };
+}
 
-  return prisma.trip.findMany({
-    where: {
-      date: dateFilter,
-      status: filter?.status
-        ? (filter.status as "SCHEDULED" | "ONGOING" | "COMPLETED" | "CANCELLED")
-        : undefined,
-    },
-    orderBy: [{ date: "desc" }, { scheduledStart: "asc" }],
-    take: 100,
-    select: {
-      id: true,
-      date: true,
-      direction: true,
-      status: true,
-      scheduledStart: true,
-      startedAt: true,
-      endedAt: true,
-      delaySeconds: true,
-      bus: {
+export async function listTrips(filter?: {
+  date?: string;
+  status?: string;
+  page?: RawPage;
+}) {
+  const where: Prisma.TripWhereInput = {
+    date: localDay(filter?.date),
+    status: filter?.status
+      ? (filter.status as "SCHEDULED" | "ONGOING" | "COMPLETED" | "CANCELLED")
+      : undefined,
+  };
+
+  /*
+   * Paged, and counted first.
+   *
+   * This took 100 rows with no count. A real fleet runs five buses on two routes
+   * across a week, so a week view crosses a hundred easily - and the trips past it
+   * were not shown, not marked as missing, and not reachable from the page.
+   *
+   * `id` is appended to the sort for the reason in `withIdOrder`: a bus running
+   * the same route at the same time on the same date has two rows tying on both
+   * `{date, scheduledStart}`, and an order that does not break the tie lets a trip
+   * appear on page 1 and page 2 at once.
+   */
+  const { rows, page } = await paged({
+    raw: filter?.page,
+    perPage: 25,
+    count: () => prisma.trip.count({ where }),
+    rows: ({ skip, take }) =>
+      prisma.trip.findMany({
+        where,
+        orderBy: [{ date: "desc" }, { scheduledStart: "asc" }, { id: "asc" }],
+        skip,
+        take,
         select: {
           id: true,
-          busNumber: true,
-          registrationNo: true,
-          route: { select: { id: true, name: true } },
+          date: true,
+          direction: true,
+          status: true,
+          scheduledStart: true,
+          startedAt: true,
+          endedAt: true,
+          delaySeconds: true,
+          bus: {
+            select: {
+              id: true,
+              busNumber: true,
+              registrationNo: true,
+              route: { select: { id: true, name: true } },
+            },
+          },
+          driver: { select: { id: true, name: true } },
+          _count: { select: { pickupRecords: true, stopEvents: true } },
+          pickupRecords: {
+            select: { status: true },
+          },
         },
-      },
-      driver: { select: { id: true, name: true } },
-      _count: { select: { pickupRecords: true, stopEvents: true } },
-      pickupRecords: {
-        select: { status: true },
-      },
-    },
+      }),
   });
+
+  return { trips: rows, page };
+}
+
+/**
+ * Trip counts per status for one date, for the tiles above the list.
+ *
+ * Separate from `listTrips` because a tile cannot be computed from a page of rows.
+ * It used to be `trips.filter(t => t.status === "ONGOING").length` over the hundred
+ * the list happened to fetch, so the "On the road" figure was the number of
+ * ongoing trips among the hundred most recent - and a fleet with more than a
+ * hundred runs in a day showed "0 ongoing" while buses were moving.
+ */
+export async function countTripsByStatus(date?: string) {
+  const grouped = await prisma.trip.groupBy({
+    // By date only, never by status: these are the tiles *above* the status
+    // filter, so they describe the whole day. Filtering them by the selected
+    // status would make the "On the road" tile read zero while you are looking at
+    // the Completed filter.
+    where: { date: localDay(date) },
+    by: ["status"],
+    _count: { _all: true },
+  });
+
+  const counts = { SCHEDULED: 0, ONGOING: 0, COMPLETED: 0, CANCELLED: 0 } as Record<
+    TripStatus,
+    number
+  >;
+  for (const row of grouped) counts[row.status] = row._count._all;
+  return counts;
 }
 
 /**
@@ -694,7 +922,7 @@ export async function getTripDetail(id: string) {
   }
 
   // How many rows starting this trip would create. Shown on a scheduled trip so
-  // the admin can see the size of the roster before committing to it — a bus
+  // the admin can see the size of the roster before committing to it â€” a bus
   // with 40 enrolled students and nobody on a route stop is worth catching now.
   const expectedCount = await prisma.enrollment.count({
     where: { busId: trip.busId, direction: trip.direction, isActive: true },
@@ -703,27 +931,71 @@ export async function getTripDetail(id: string) {
   return { trip, stops, counts, expectedCount };
 }
 
-export async function listAlerts() {
-  const alerts = await prisma.emergencyAlert.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      busId: true,
-      type: true,
-      message: true,
-      status: true,
-      createdAt: true,
-      resolvedAt: true,
-      acknowledgedAt: true,
-      resolutionNote: true,
-      lat: true,
-      lng: true,
-      trip: { select: { id: true, date: true, direction: true, status: true } },
-      raisedBy: { select: { name: true, role: true } },
-      resolvedBy: { select: { name: true } },
-    },
+export async function listAlerts(filter?: { status?: string; page?: RawPage }) {
+  const statusFilter = filter?.status
+    ? (filter.status.toUpperCase() as AlertStatus)
+    : undefined;
+  const where = { status: statusFilter };
+
+  /*
+   * Counted and paged in the database rather than filtered in memory.
+   *
+   * This used to fetch the newest 100 rows and let the page filter them with
+   * `Array.filter`. Two things were wrong with that, and the second is the one
+   * that mattered:
+   *
+   * 1. Rows past the hundred were never requested, so the list was quietly
+   *    incomplete - and the entries that vanish are emergency alerts.
+   * 2. The filter chips counted from the same hundred, so "Open (3)" was the
+   *    number of open alerts *among the hundred most recent*, presented with the
+   *    same confidence as a total. A number that is quietly the wrong number is
+   *    worse than one that is visibly a sample.
+   *
+   * `statusCounts` comes from a `groupBy` over the whole table with no status
+   * predicate, because a chip has to show what selecting it would give you - all
+   * four counts are always all four statuses.
+   */
+  const { rows, page } = await paged({
+    raw: filter?.page,
+    perPage: 25,
+    count: () => prisma.emergencyAlert.count({ where }),
+    rows: ({ skip, take }) =>
+      prisma.emergencyAlert.findMany({
+        where,
+        // `createdAt` alone is not a total order: two alerts raised in the same
+        // millisecond have no defined relative position, so a row could land on
+        // two pages or on none.
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+        select: {
+          id: true,
+          busId: true,
+          type: true,
+          message: true,
+          status: true,
+          createdAt: true,
+          resolvedAt: true,
+          acknowledgedAt: true,
+          resolutionNote: true,
+          lat: true,
+          lng: true,
+          trip: { select: { id: true, date: true, direction: true, status: true } },
+          raisedBy: { select: { name: true, role: true } },
+          resolvedBy: { select: { name: true } },
+        },
+      }),
   });
+
+  const grouped = await prisma.emergencyAlert.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+  });
+  const statusCounts = Object.fromEntries(
+    grouped.map((g) => [g.status, g._count._all]),
+  ) as Record<AlertStatus, number>;
+
+  const alerts = rows;
 
   // EmergencyAlert stores a busId but declares no relation to Bus, so the bus
   // summary is joined in a second query rather than duplicating bus data here.
@@ -739,5 +1011,11 @@ export async function listAlerts() {
   });
   const byId = new Map(buses.map((b) => [b.id, b]));
 
-  return alerts.map((a) => ({ ...a, bus: byId.get(a.busId) ?? null }));
+  return {
+    alerts: alerts.map((a) => ({ ...a, bus: byId.get(a.busId) ?? null })),
+    /** True totals per status, for the filter chips. */
+    statusCounts,
+    /** The pager's window, already clamped. */
+    page,
+  };
 }

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { listAlerts } from "@/lib/admin/queries";
 import { Role } from "@/generated/prisma/enums";
+import { describeWindow } from "@/lib/pagination";
 import { PageHeader } from "@/components/portal/portal-shell";
+import { Pagination } from "@/components/portal/pagination";
 import { Card, CardTitle, Badge, StatTile, EmptyState } from "@/components/ui/primitives";
 import { ActionForm } from "@/components/admin/action-form";
 import {
@@ -20,6 +22,18 @@ const STATUS_TONE = {
   RESOLVED: "emerald",
 } as const;
 
+/**
+ * Total alerts across every status.
+ *
+ * For the "All (n)" chip, which shows what you would get by clearing the filter.
+ * Summing the three counts rather than reusing the pager's total, because the
+ * pager's total already respects the current filter - so under "Open (4)" it is
+ * 4, and the All chip would read "All (4)" for a queue of thirty.
+ */
+function countAll(counts: Record<string, number>): number {
+  return Object.values(counts).reduce((n, v) => n + v, 0);
+}
+
 const TYPE_LABEL: Record<string, string> = {
   EMERGENCY: "Emergency",
   BREAKDOWN: "Breakdown",
@@ -31,25 +45,30 @@ const TYPE_LABEL: Record<string, string> = {
 export default async function AlertsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string | string[] }>;
 }) {
   await requireRole(Role.ADMIN);
-  const { status } = await searchParams;
+  const { status, page: rawPage } = await searchParams;
 
-  const all = await listAlerts();
-  const alerts = status
-    ? all.filter((a) => a.status === status.toUpperCase())
-    : all;
-
-  const open = all.filter((a) => a.status === "OPEN");
-  const acknowledged = all.filter((a) => a.status === "ACKNOWLEDGED");
-  const resolved = all.filter((a) => a.status === "RESOLVED");
+  /*
+   * The status filter and the page are applied in the database.
+   *
+   * This page used to fetch the newest hundred alerts and filter them in memory,
+   * which put two wrong numbers on screen: the list was silently missing whatever
+   * came after the hundred, and the tiles counted from those hundred - so
+   * "Needs a response 2" could be two of the last hundred, not two in total. For
+   * an emergency queue, an understated count is the failure mode that hurts.
+   */
+  const { alerts, statusCounts, page } = await listAlerts({ status, page: rawPage });
 
   const FILTERS = [
-    { value: "", label: `All (${all.length})` },
-    { value: "OPEN", label: `Open (${open.length})` },
-    { value: "ACKNOWLEDGED", label: `Acknowledged (${acknowledged.length})` },
-    { value: "RESOLVED", label: `Resolved (${resolved.length})` },
+    { value: "", label: `All (${statusCounts ? countAll(statusCounts) : 0})` },
+    { value: "OPEN", label: `Open (${statusCounts?.OPEN ?? 0})` },
+    {
+      value: "ACKNOWLEDGED",
+      label: `Acknowledged (${statusCounts?.ACKNOWLEDGED ?? 0})`,
+    },
+    { value: "RESOLVED", label: `Resolved (${statusCounts?.RESOLVED ?? 0})` },
   ];
 
   return (
@@ -63,21 +82,21 @@ export default async function AlertsPage({
         <div className="grid gap-4 sm:grid-cols-3">
           <StatTile
             label="Needs a response"
-            value={open.length}
-            sub={open.length > 0 ? "not yet acknowledged" : "all clear"}
-            tone={open.length > 0 ? "red" : "emerald"}
+            value={statusCounts.OPEN}
+            sub={statusCounts.OPEN > 0 ? "not yet acknowledged" : "all clear"}
+            tone={statusCounts.OPEN > 0 ? "red" : "emerald"}
           />
           <StatTile
             label="Being handled"
-            value={acknowledged.length}
-            tone={acknowledged.length > 0 ? "amber" : "slate"}
+            value={statusCounts.ACKNOWLEDGED}
+            tone={statusCounts.ACKNOWLEDGED > 0 ? "amber" : "slate"}
           />
-          <StatTile label="Resolved" value={resolved.length} tone="emerald" />
+          <StatTile label="Resolved" value={statusCounts.RESOLVED} tone="emerald" />
         </div>
 
         <Card>
           <CardTitle
-            hint="Newest first, most recent 100."
+            hint={describeWindow(page)}
             action={
               <div className="flex flex-wrap gap-1.5">
                 {FILTERS.map((f) => (
@@ -216,6 +235,8 @@ export default async function AlertsPage({
               ))}
             </ul>
           )}
+
+          <Pagination page={page} basePath="/admin/alerts" params={{ status }} />
         </Card>
       </div>
     </>

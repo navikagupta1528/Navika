@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
-import { listStudents } from "@/lib/admin/queries";
+import { getStudentForEdit, listStudents } from "@/lib/admin/queries";
 import { getEnrollOptions } from "@/lib/admin/enroll-options";
 import { Role } from "@/generated/prisma/enums";
+import { describeWindow } from "@/lib/pagination";
 import { PageHeader } from "@/components/portal/portal-shell";
+import { Pagination } from "@/components/portal/pagination";
 import { Card, CardTitle, Badge, StatTile, EmptyState } from "@/components/ui/primitives";
 import { EnrollForm } from "@/components/admin/enroll-form";
 import { ActionForm } from "@/components/admin/action-form";
@@ -20,27 +22,26 @@ export const metadata = { title: "Students" };
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; edit?: string }>;
+  searchParams: Promise<{ q?: string; edit?: string; page?: string | string[] }>;
 }) {
   await requireRole(Role.ADMIN);
-  const { q, edit } = await searchParams;
+  const { q, edit, page: rawPage } = await searchParams;
 
-  const [students, options] = await Promise.all([listStudents(), getEnrollOptions()]);
+  /*
+   * Search and paging both happen in the database now, so they share one `where`.
+   * Filtering in JavaScript after fetching would have meant fetching every
+   * student to draw a page of twenty-five.
+   */
+  const [list, options, editing] = await Promise.all([
+    listStudents({ q, page: rawPage }),
+    getEnrollOptions(),
+    // Looked up by id rather than found in the list: with a paged list, the
+    // student you asked to edit is usually not on the page you are looking at.
+    edit ? getStudentForEdit(edit) : Promise.resolve(null),
+  ]);
 
-  const term = q?.trim().toLowerCase() ?? "";
-  const filtered = term
-    ? students.filter((s) =>
-        [s.user.name, s.user.email, s.enrollmentNo, s.department ?? ""]
-          .join(" ")
-          .toLowerCase()
-          .includes(term),
-      )
-    : students;
-
-  const assigned = students.filter((s) => s.enrollments.length > 0);
-  const unassigned = students.filter((s) => s.enrollments.length === 0);
-  const noParent = students.filter((s) => s.guardianCount === 0);
-  const editing = edit ? students.find((s) => s.id === edit) : undefined;
+  const { students, counts, noParentNames, needsAssignment, page } = list;
+  const term = q?.trim() ?? "";
 
   return (
     <>
@@ -51,38 +52,33 @@ export default async function StudentsPage({
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Students" value={students.length} tone="violet" />
+          <StatTile label="Students" value={counts.total} tone="violet" />
           <StatTile
             label="With an assignment"
-            value={assigned.length}
-            sub={`${unassigned.length} unassigned`}
-            tone={unassigned.length > 0 ? "amber" : "emerald"}
+            value={counts.assigned}
+            sub={`${counts.unassigned} unassigned`}
+            tone={counts.unassigned > 0 ? "amber" : "emerald"}
           />
           <StatTile
             label="No parent linked"
-            value={noParent.length}
-            sub={noParent.length > 0 ? "cannot get alerts" : "all linked"}
-            tone={noParent.length > 0 ? "amber" : "emerald"}
+            value={counts.noParent}
+            sub={counts.noParent > 0 ? "cannot get alerts" : "all linked"}
+            tone={counts.noParent > 0 ? "amber" : "emerald"}
           />
-          <StatTile
-            label="Assignments"
-            value={students.reduce((n, s) => n + s.enrollments.length, 0)}
-            sub="active enrolments"
-          />
+          <StatTile label="Assignments" value={counts.assignments} sub="active enrolments" />
         </div>
 
-        {noParent.length > 0 ? (
+        {counts.noParent > 0 ? (
           <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 inset-ring-1 inset-ring-amber-200">
             <p className="font-medium">These students have no parent linked</p>
             <p className="mt-0.5 text-xs">
               Pickup, delay and emergency notifications have nowhere to go without a
               guardian, so this student is effectively untracked:{" "}
-              {noParent
-                .slice(0, 8)
-                .map((s) => s.user.name)
-                .join(", ")}
-              {noParent.length > 8 ? ` and ${noParent.length - 8} more` : ""}. They can
-              register as a parent and link the child from the parent portal.
+              {noParentNames.join(", ")}
+              {counts.noParent > noParentNames.length
+                ? ` and ${counts.noParent - noParentNames.length} more`
+                : ""}
+              . They can register as a parent and link the child from the parent portal.
             </p>
           </div>
         ) : null}
@@ -123,7 +119,7 @@ export default async function StudentsPage({
 
         <Card>
           <CardTitle
-            hint={`${filtered.length} of ${students.length} shown`}
+            hint={describeWindow(page)}
             action={
               <form method="get" className="flex items-center gap-2">
                 {edit ? <input type="hidden" name="edit" value={edit} /> : null}
@@ -151,7 +147,7 @@ export default async function StudentsPage({
             All students
           </CardTitle>
 
-          {filtered.length === 0 ? (
+          {students.length === 0 ? (
             <EmptyState
               title="No students match"
               description={
@@ -174,7 +170,7 @@ export default async function StudentsPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((student) => (
+                  {students.map((student) => (
                     <tr key={student.id} className="align-top">
                       <td className="py-2.5 pr-4">
                         <p className="font-medium text-slate-900">{student.user.name}</p>
@@ -313,15 +309,17 @@ export default async function StudentsPage({
               </table>
             </div>
           )}
+
+          <Pagination page={page} basePath="/admin/students" params={{ q }} />
         </Card>
 
-        {unassigned.length > 0 ? (
+        {counts.unassigned > 0 ? (
           <Card>
             <CardTitle hint="Students with no bus — assign them before the next trip.">
               Needs an assignment
             </CardTitle>
             <ul className="flex flex-wrap gap-2">
-              {unassigned.slice(0, 40).map((s) => (
+              {needsAssignment.map((s) => (
                 <li key={s.id}>
                   <Link
                     href={`/admin/students?edit=${s.id}`}
@@ -333,9 +331,10 @@ export default async function StudentsPage({
                 </li>
               ))}
             </ul>
-            {unassigned.length > 40 ? (
+            {counts.unassigned > needsAssignment.length ? (
               <p className="mt-3 text-xs text-slate-500">
-                and {unassigned.length - 40} more — use search to find them.
+                and {counts.unassigned - needsAssignment.length} more — use search to find
+                them.
               </p>
             ) : null}
           </Card>

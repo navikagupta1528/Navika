@@ -14,8 +14,8 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 364 unit tests, 231 HTTP smoke
-checks across six suites, Lighthouse 99 / 100 / 100 / 100 on both public
+Current state: **typecheck and lint clean, 392 unit tests, 250 HTTP smoke
+checks across seven suites, Lighthouse 99 / 100 / 100 / 100 on both public
 pages, 36 routes building.**
 
 **Phase 0 - foundation**
@@ -158,6 +158,66 @@ Two defects surfaced while writing the tests, both of which looked correct:
 34 unit tests cover the schedule; 10 smoke checks cover the wiring, by posting the
 real sign-in form.
 
+## Paging, and the numbers that were quietly wrong
+
+Three lists took a fixed number of rows and said nothing about the total: students
+25, trips 100, alerts 100. Past those numbers the extra rows did not fail to load —
+they were never asked for, and nothing on screen said so. An admin looking at a
+week of trips across a real fleet would have seen a complete, confident, quietly
+wrong list.
+
+A hard cap without a count is not a limit. It is a claim about the size of the data.
+
+For the alerts list that was not a cosmetic problem. The rows that vanish are
+emergency alerts, so the truncation silently removed the entries that matter most.
+
+**The worse half.** Each of those pages also computed its tiles from the rows it
+had fetched:
+
+- `Open (3)` was the number of open alerts *among the hundred most recent*.
+- `On the road 0` was the number of ongoing trips *among the hundred fetched* — so
+  a fleet running more than a hundred trips in a day showed zero while buses were
+  moving.
+
+A number that is quietly the wrong number is worse than one that is visibly a
+sample, because it is presented with the same confidence either way. Those counts
+are now `groupBy` queries against the whole table.
+
+**Clamping, and why it is not part of parsing.** `?page=5` on a list that has since
+shrunk to two pages has to show page two, and the last page is not known until the
+count has run. The obvious implementation parses `?page=`, queries `skip`/`take`
+from it, then clamps for display — which produces "Showing 26 to 40 of 40" above
+an empty table. The label and the rows are each individually correct and jointly a
+lie. So `src/lib/paged-query.ts` counts first, clamps, and only then builds the
+query, which costs a round trip and is not avoidable.
+
+**Ordering, which is not arithmetic.** Two buses on the same route at the same
+time on the same date tie on both `{date, scheduledStart}`, and Postgres is free to
+return tied rows in a different order between the request that fetches page one and
+the request that fetches page two. The list then neither loses nor duplicates
+anything — a trip simply appears on both pages, or on neither. Invisible with
+twenty-five rows, present the moment there are more. Every paged `orderBy` now ends
+in the primary key.
+
+**Search moved into SQL.** The students page fetched every student with every
+enrolment and every guardian attached, then filtered in JavaScript — a page that
+loaded the whole school to draw twenty-five rows. One behaviour change worth naming:
+a term used to match those fields concatenated with spaces, so it could match
+*across* them. Nobody types that on purpose, and it made results depend on field
+order.
+
+**A bug that only paging could introduce.** `?edit=<id>` was resolved by searching
+the rows already on the page. Once the list is paged, deep-linking to edit someone
+on page four silently renders the "new assignment" form instead: the link works,
+the page loads, and the wrong form is on it. That lookup is now by id.
+
+`smoke:pagination` plants thirty students to push the list past a page boundary,
+checks that page two is *disjoint* from page one by comparing row ids rather than
+looking for a difference, and removes what it planted. Its first three checks
+compare what each page prints against a direct count from the database, which is
+the only way to catch a truncation bug — the truncation was invisible precisely
+because the page was self-consistent.
+
 ## Stack
 
 | Concern            | Choice                             | Why                                                              |
@@ -282,7 +342,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:tracking`| Tracking, attendance, alerts, notifications              |
 | `npm run smoke:reconcile` | Plant real rows, prove abandoned trips close and live ones don't |
 | `npm run smoke:boundaries` | Every portal page, every role, anonymous and wrong-role  |
-| `npm run smoke:all`     | All six smoke suites                                     |
+| `npm run smoke:all`     | All seven smoke suites                                    |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
 | `npm run setup:db`      | One-time database provisioning                           |
@@ -379,7 +439,7 @@ prisma/
 scripts/
   setup-db.ps1           one-time database provisioning
   start-db.ps1           start the local cluster after a reboot
-  smoke-*.ts             six HTTP suites against a running server
+  smoke-*.ts             seven HTTP suites against a running server
   smoke-reconcile.ts     abandoned-trip reconciliation, on real rows
   smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
@@ -413,6 +473,8 @@ src/
     api-auth.ts          API-side guard, returns 401/403 not a redirect
     login-throttle.ts    attempt budgets and backoff, pure, no ambient clock
     login-guard.ts       the one live store, and where a request's IP comes from
+    pagination.ts        page arithmetic and clamping, pure
+    paged-query.ts       count, clamp, then fetch - in that order
     queries.ts           scoped read helpers
     day-window.ts        "today" as one half-open local range, pure
     geo.ts               haversine, bearing, ETA fallback
@@ -455,7 +517,7 @@ path-alias configuration here.
 
 Two layers, because they catch different things.
 
-**Unit tests** (`npm run test`, 364 assertions over 15 files) cover the logic
+**Unit tests** (`npm run test`, 392 assertions over 16 files) cover the logic
 where a bug is invisible from the outside: GPS acceptance, ETA parsing, stop
 ordering, freshness decay, CSV escaping, route-movement maths, trip liveness,
 and health classification. These modules deliberately import nothing from the
@@ -463,7 +525,7 @@ database, the network or the DOM, which is what makes them testable at all — a
 is why they use relative sibling imports rather than `@/lib/...`, because Vitest
 has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 231 checks over six suites) run against a
+**Smoke suites** (`npm run smoke:all`, 250 checks over seven suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
@@ -475,6 +537,7 @@ authorization bugs, and those only appear when a real session meets a real row:
 | `smoke:tracking`    |     96 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
 | `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
 | `smoke:boundaries`  |     51 | 28 pages requested anonymously, a 4×4 role matrix, deep links, forged cookies, the API |
+| `smoke:pagination`  |     19 | Counts against the database, page two disjoint from page one, clamping, filters surviving paging |
 
 The suites find real bugs, which is the entire reason they exist. `smoke:admin`
 found five on its first run, and `smoke:tracking` found one immediately:
