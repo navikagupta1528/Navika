@@ -184,7 +184,7 @@ export default async function StudentsPage({
                       </td>
                       <td className="py-2.5 pr-4">
                         {student.enrollments.length === 0 ? (
-                          <span className="text-xs text-amber-600">none</span>
+                          <span className="text-xs text-amber-700">none</span>
                         ) : (
                           <ul className="space-y-1.5">
                             {student.enrollments.map((e) => (
@@ -202,7 +202,7 @@ export default async function StudentsPage({
                                   <span className="text-slate-500">at {e.stop.name}</span>
                                 </div>
                                 <div className="mt-1 flex items-center gap-2">
-                                  <span className="text-slate-400">{e.academicYear}</span>
+                                  <span className="text-slate-500">{e.academicYear}</span>
                                   <ActionForm
                                     action={endEnrollment}
                                     hidden={{ id: e.id }}
@@ -219,7 +219,7 @@ export default async function StudentsPage({
 
                         {student.endedEnrollments.length > 0 ? (
                           <details className="mt-1.5">
-                            <summary className="cursor-pointer text-[11px] text-slate-400">
+                            <summary className="cursor-pointer text-[11px] text-slate-500">
                               {student.endedEnrollments.length} ended
                             </summary>
                             <ul className="mt-1 space-y-1">
@@ -249,13 +249,13 @@ export default async function StudentsPage({
                       </td>
                       <td className="py-2.5 pr-4 text-xs">
                         {student.guardianCount === 0 ? (
-                          <span className="text-amber-600">none</span>
+                          <span className="text-amber-700">none</span>
                         ) : (
                           <ul className="space-y-0.5 text-slate-600">
                             {student.guardians.map((g) => (
                               <li key={g.id}>
                                 {g.user.name}
-                                <span className="text-slate-400"> · {g.relation}</span>
+                                <span className="text-slate-500"> · {g.relation}</span>
                               </li>
                             ))}
                           </ul>
@@ -326,7 +326,7 @@ export default async function StudentsPage({
                     className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:border-brand-300 hover:bg-brand-50"
                   >
                     {s.user.name}
-                    <span className="text-slate-400">{s.enrollmentNo}</span>
+                    <span className="text-slate-500">{s.enrollmentNo}</span>
                   </Link>
                 </li>
               ))}

@@ -54,7 +54,7 @@ export function Pagination({
             <li
               key={`gap-${i}`}
               aria-hidden="true"
-              className="px-2 text-sm text-slate-400 select-none"
+              className="px-2 text-sm text-slate-500 select-none"
             >
               &hellip;
             </li>
@@ -116,7 +116,7 @@ function Step({
       // convey "you are on page 1" without pretending there is something to press.
       // `aria-disabled` is not set because it is not supported on `listitem`; the
       // absence of a link is the accessible part.
-      <li className={`${className} text-slate-300`}>{children}</li>
+      <li className={`${className} text-slate-500`}>{children}</li>
     );
   }
 

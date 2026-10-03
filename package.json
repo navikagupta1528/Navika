@@ -24,6 +24,7 @@
     "smoke:reconcile": "tsx --conditions=react-server scripts/smoke-reconcile.ts",
     "smoke:boundaries": "tsx scripts/smoke-boundaries.ts",
     "smoke:pagination": "tsx --conditions=react-server scripts/smoke-pagination.ts",
+    "audit": "tsx scripts/audit-pages.ts",
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",

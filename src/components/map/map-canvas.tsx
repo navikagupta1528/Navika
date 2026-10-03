@@ -281,7 +281,18 @@ export default function MapCanvas({
         pitchWithRotate: false,
         touchPitch: false,
         maplibreLogo: false,
-        attributionControl: { compact: true },
+        // The built-in AttributionControl is replaced by `MapAttribution` below.
+        // It renders its links with no underline and no other non-colour cue, so
+        // every map in the app failed `link-in-text-block`: a link sitting in a
+        // run of text that is distinguishable only by being a slightly different
+        // colour. That is a real WCAG 1.4.1 failure, and it is MapLibre's markup
+        // rather than ours, which is why it cannot be fixed with a class.
+        //
+        // Turning the control off also means the attribution is ours to lay out,
+        // so it can sit in the corner the app already reserves and stay legible
+        // over a dark route line instead of fighting the control for the same
+        // pixels.
+        attributionControl: false,
         maxZoom: 19,
       });
     } catch {
@@ -667,6 +678,42 @@ export default function MapCanvas({
           </p>
         </div>
       ) : null}
+
+      {ready ? <MapAttribution /> : null}
+    </div>
+  );
+}
+
+/**
+ * OpenStreetMap attribution, rendered by us rather than by MapLibre.
+ *
+ * Two reasons, one legal and one practical.
+ *
+ * The legal one: OSM's tile usage policy requires visible attribution. It is not
+ * decorative and it does not go away when the map is panned or zoomed, so it is
+ * pinned to the corner rather than left to the control's compact toggle.
+ *
+ * The practical one: the built-in control's links are underlined by nothing and
+ * differ from surrounding text only in colour, which fails WCAG 1.4.1. Ours are
+ * underlined, meet the 4.5:1 contrast threshold in slate-700, and sit on a solid
+ * plate so they stay readable over both the pale basemap and a coloured route
+ * line.
+ */
+function MapAttribution() {
+  return (
+    <div className="pointer-events-none absolute bottom-0 right-0 z-10">
+      <p className="pointer-events-auto rounded-tl-lg bg-white/85 px-2 py-1 text-[10px] leading-tight text-slate-700 backdrop-blur-sm">
+        Map data{" "}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="font-medium underline decoration-slate-400 underline-offset-2 hover:decoration-slate-700"
+        >
+          © OpenStreetMap
+        </a>{" "}
+        contributors
+      </p>
     </div>
   );
 }

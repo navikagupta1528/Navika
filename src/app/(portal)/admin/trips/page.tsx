@@ -242,8 +242,8 @@ export default async function TripsPage({
                             <span
                               className={`ml-1.5 text-xs ${
                                 (trip.delaySeconds ?? 0) > 300
-                                  ? "font-medium text-amber-600"
-                                  : "text-slate-400"
+                                  ? "font-medium text-amber-700"
+                                  : "text-slate-500"
                               }`}
                             >
                               {delay} late
@@ -252,7 +252,7 @@ export default async function TripsPage({
                         </td>
                         <td className="py-2.5 pr-4 tabular-nums text-slate-600">
                           {total === 0 ? (
-                            <span className="text-xs text-slate-400">
+                            <span className="text-xs text-slate-500">
                               not generated
                             </span>
                           ) : (

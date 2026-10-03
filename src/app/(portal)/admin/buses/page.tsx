@@ -109,7 +109,7 @@ export default async function BusesPage() {
                       {bus.route.name}
                     </Link>
                   ) : (
-                    <span className="text-amber-600">no route — cannot run</span>
+                    <span className="text-amber-700">no route — cannot run</span>
                   )}
                 </Cell>
                 <Cell>
@@ -122,7 +122,7 @@ export default async function BusesPage() {
                   >
                     {bus.enrolled}
                   </span>
-                  <span className="text-xs text-slate-400"> / {bus.capacity}</span>
+                  <span className="text-xs text-slate-500"> / {bus.capacity}</span>
                 </Cell>
                 <Cell>
                   <Badge tone={STATUS_TONE[bus.status]}>{bus.status.toLowerCase()}</Badge>

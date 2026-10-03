@@ -86,6 +86,50 @@ async function main() {
    */
   await startTripReconciler();
 
+  /*
+   * WEB SOCKET UPGRADES (dev only, but it is why this block exists at all)
+   * ----------------------------------------------------------------------
+   * `next dev` keeps a websocket open at /_next/hmr to push hot updates. A custom
+   * server owns the HTTP server outright, so unless the 'upgrade' event is handed
+   * to Next it never sees the handshake and hot reload silently stops working.
+   *
+   * Two things about this, both learned the hard way:
+   *
+   * 1. The `isSocketRequest` guard. engine.io answers its own path first and then
+   *    calls the other 'upgrade' listeners, so without this we would pass an
+   *    already-handshaked socket to Next, which tears it down - and live tracking
+   *    dies with it.
+   *
+   * 2. Registration has to happen before `attachSocketServer` below. engine.io
+   *    installs its own 'upgrade' listener, and the engine.io copy in this tree
+   *    does not snapshot the listeners it displaces, so a handler registered
+   *    afterwards is never reached.
+   *
+   * Registering the handler alone is not sufficient. Next rejects the upgrade
+   * outright when the `Origin` is not on its dev allowlist, and it answers a
+   * rejected upgrade by writing plain text to a socket - `Unauthorized` where a
+   * status line belongs - which the browser reports as
+   * `net::ERR_INVALID_HTTP_RESPONSE` rather than as a 403. That is why
+   * `allowedDevOrigins` in next.config.ts is load-bearing and not decoration.
+   *
+   * The whole listener is dev-only. In production nothing upgrades, and leaving
+   * an unhandled 'upgrade' event registered on a public server is one more thing
+   * to reason about at the edge.
+   */
+  if (dev) {
+    const nextUpgrade = app.getUpgradeHandler();
+    server.on("upgrade", (req, socket, head) => {
+      if (isSocketRequest(req.url)) return;
+      // `getUpgradeHandler` is async and an unhandled rejection here would take the
+      // process down mid-session, so the failure is reported and the socket closed
+      // rather than left half-open.
+      void Promise.resolve(nextUpgrade(req, socket, head)).catch((error: unknown) => {
+        console.error(`\n  HMR upgrade failed for ${req.url}:\n`, error);
+        socket.destroy();
+      });
+    });
+  }
+
   const io = attachSocketServer(server);
   setSocketServer(io);
 

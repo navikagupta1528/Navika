@@ -176,7 +176,7 @@ export default async function TrackBusPage({
                     >
                       {s.order}
                     </span>
-                    <span className={s.visited ? "text-slate-400 line-through" : "text-slate-800"}>
+                    <span className={s.visited ? "text-slate-500 line-through" : "text-slate-800"}>
                       {s.name}
                     </span>
                   </span>

@@ -141,7 +141,7 @@ export default async function FleetPage() {
             </table>
           </div>
 
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Positions shown are from {formatTime(new Date(asOf))}. This page does
             not refresh itself; open it again for the latest.
           </p>

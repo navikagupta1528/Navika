@@ -33,8 +33,8 @@ export default function NewStopPage() {
 
         <p className="mt-4 text-xs text-slate-500">
           Tip: open OpenStreetMap, right-click the exact spot and copy the numbers
-          after <code className="rounded bg-slate-100 px-1">lat=</code> and{" "}
-          <code className="rounded bg-slate-100 px-1">#map=</code>. A stop off by
+          after <code className="code-inline">lat=</code> and{" "}
+          <code className="code-inline">#map=</code>. A stop off by
           100&nbsp;m makes every ETA wrong.
         </p>
       </div>

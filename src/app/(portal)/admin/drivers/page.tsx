@@ -119,7 +119,7 @@ export default async function DriversPage() {
                           driver.licenseExpired
                             ? "font-medium text-red-600"
                             : soon.some((s) => s.id === driver.id)
-                              ? "text-amber-600"
+                              ? "text-amber-700"
                               : "text-slate-500"
                         }
                       >
@@ -128,7 +128,7 @@ export default async function DriversPage() {
                       </span>
                     </span>
                   ) : (
-                    <span className="text-amber-600">no profile</span>
+                    <span className="text-amber-700">no profile</span>
                   )}
                 </Cell>
                 <Cell className="tabular-nums text-slate-600">
@@ -136,7 +136,7 @@ export default async function DriversPage() {
                 </Cell>
                 <Cell>
                   {driver.buses.length === 0 ? (
-                    <span className="text-xs text-slate-400">unassigned</span>
+                    <span className="text-xs text-slate-500">unassigned</span>
                   ) : (
                     driver.buses.map((b) => (
                       <Link

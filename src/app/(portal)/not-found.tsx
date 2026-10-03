@@ -19,7 +19,7 @@ export default function PortalNotFound() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="w-full max-w-md text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           Not found
         </p>
         <h1 className="mt-2 text-lg font-semibold text-slate-900">

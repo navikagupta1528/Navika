@@ -135,7 +135,7 @@ export function EnrollForm({ students, buses, action, defaultValues, academicYea
             <p className="mt-1 text-xs font-medium text-red-600">{state.errors.stopId}</p>
           ) : null}
           {busId && stops.length === 0 ? (
-            <p className="mt-1 text-xs text-amber-600">
+            <p className="mt-1 text-xs text-amber-700">
               This bus has no stops on its route. Add stops to the route first.
             </p>
           ) : null}

@@ -200,7 +200,7 @@ export default async function ReportsPage({
                         </Cell>
                         <Cell>
                           {rate == null ? (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-500">—</span>
                           ) : (
                             <Badge
                               tone={
@@ -327,7 +327,7 @@ function DailyChart({
                   <div className="h-0.5 w-full rounded-sm bg-slate-200" />
                 )}
               </div>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-500">
                 {new Date(`${d.date}T00:00:00`).getDate()}
               </span>
             </div>

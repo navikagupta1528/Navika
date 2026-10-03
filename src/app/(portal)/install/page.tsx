@@ -78,9 +78,9 @@ export default async function InstallPage() {
             </li>
           </ol>
           <p className="mt-3 text-xs text-slate-500">
-            Sharing needs an <code className="rounded bg-slate-100 px-1">https</code>{" "}
+            Sharing needs an <code className="code-inline">https</code>{" "}
             address. Browsers refuse location access on a plain{" "}
-            <code className="rounded bg-slate-100 px-1">http</code> address, and
+            <code className="code-inline">http</code> address, and
             the app will say so rather than failing silently.
           </p>
         </section>

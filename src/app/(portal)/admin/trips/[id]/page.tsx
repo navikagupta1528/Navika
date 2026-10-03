@@ -255,7 +255,7 @@ export default async function TripDetailPage({
                           <Badge tone="amber">not on this route</Badge>
                         ) : null}
                         {bucket.students.length === 0 ? (
-                          <span className="text-xs font-normal text-slate-400">
+                          <span className="text-xs font-normal text-slate-500">
                             nobody enrolled here
                           </span>
                         ) : (
@@ -268,7 +268,7 @@ export default async function TripDetailPage({
                     </CardTitle>
 
                     {bucket.students.length === 0 ? (
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-slate-500">
                         The bus still stops here, but no student is assigned to this point.
                       </p>
                     ) : (
@@ -354,7 +354,7 @@ export default async function TripDetailPage({
                       <span
                         className={
                           (trip.delaySeconds ?? 0) > 300
-                            ? "font-medium text-amber-600"
+                            ? "font-medium text-amber-700"
                             : undefined
                         }
                       >

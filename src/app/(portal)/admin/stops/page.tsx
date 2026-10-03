@@ -65,7 +65,7 @@ export default async function StopsPage() {
                 {stop.routeCount > 0 ? (
                   <Badge tone="blue">{stop.routeCount} route{stop.routeCount === 1 ? "" : "s"}</Badge>
                 ) : (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-slate-500">—</span>
                 )}
               </Cell>
               <Cell>

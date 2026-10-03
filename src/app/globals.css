@@ -93,6 +93,21 @@ body {
     @apply rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700
            inset-ring-1 inset-ring-red-200;
   }
+
+  /*
+   * Inline code.
+   *
+   * Exists as a class rather than a repeated utility because the colour is not
+   * free. `bg-slate-100` is a *tint*, so it counts as the background for WCAG
+   * contrast, and slate-500 - the app's normal muted text - drops to 4.34:1 on
+   * slate-100 where it needs 4.5:1. Five elements carried this exact combination
+   * and all five were the same invisible 0.16 shortfall. `text-slate-700` clears
+   * it at 6.2:1 and is also simply the right tone for code, which should read as
+   * a different voice from the prose around it rather than as dimmer prose.
+   */
+  .code-inline {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-700;
+  }
 }
 
 /* ------------------------------------------------------------------ */

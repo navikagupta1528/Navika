@@ -164,7 +164,7 @@ export default async function AlertsPage({
                             {" · "}
                             <Link
                               href={`/admin/buses/${alert.bus.id}`}
-                              className="text-brand-700 hover:underline"
+                              className="text-brand-700 underline decoration-brand-400 underline-offset-2 hover:decoration-brand-700"
                             >
                               {alert.bus.busNumber}
                             </Link>
@@ -176,7 +176,7 @@ export default async function AlertsPage({
                             {" · "}
                             <Link
                               href={`/admin/trips/${alert.trip.id}`}
-                              className="text-brand-700 hover:underline"
+                              className="text-brand-700 underline decoration-brand-400 underline-offset-2 hover:decoration-brand-700"
                             >
                               trip
                             </Link>

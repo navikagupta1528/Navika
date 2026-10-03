@@ -207,7 +207,7 @@ export function FleetMap({
                 <li key={`${a.busId}-${a.stopId}-${a.at}`} className="text-xs text-slate-600">
                   <span className="font-medium text-slate-900">{label}</span> reached {a.stopName}
                   {a.simulated ? (
-                    <span className="ml-1 text-slate-400">(simulated)</span>
+                    <span className="ml-1 text-slate-500">(simulated)</span>
                   ) : null}
                 </li>
               );

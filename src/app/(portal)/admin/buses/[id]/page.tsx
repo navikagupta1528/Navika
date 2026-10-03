@@ -253,7 +253,7 @@ export default async function BusDetailPage({
                       {load.route.name}
                     </Link>
                   ) : (
-                    <span className="text-amber-600">none</span>
+                    <span className="text-amber-700">none</span>
                   ),
                 },
                 { label: "Capacity", value: `${bus.capacity} seats` },

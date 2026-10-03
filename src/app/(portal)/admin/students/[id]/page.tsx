@@ -378,7 +378,7 @@ export default async function StudentDetailPage({
 
               {student.endedEnrollments.length > 0 ? (
                 <details className="mt-4">
-                  <summary className="cursor-pointer text-xs text-slate-400">
+                  <summary className="cursor-pointer text-xs text-slate-500">
                     {student.endedEnrollments.length} ended assignments
                   </summary>
                   <ul className="mt-2 space-y-1 text-xs text-slate-500">

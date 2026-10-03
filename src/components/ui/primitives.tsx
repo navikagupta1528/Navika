@@ -108,7 +108,7 @@ export function StatTile({
   const accent: Record<Tone, string> = {
     slate: "text-slate-900",
     emerald: "text-emerald-600",
-    amber: "text-amber-600",
+    amber: "text-amber-700",
     red: "text-red-600",
     blue: "text-blue-600",
     violet: "text-violet-600",

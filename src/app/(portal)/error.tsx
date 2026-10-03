@@ -48,7 +48,7 @@ export default function PortalError({
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           Something went wrong
         </p>
         <h1 className="mt-2 text-lg font-semibold text-slate-900">
@@ -77,9 +77,9 @@ export default function PortalError({
         </div>
 
         {error.digest ? (
-          <p className="mt-5 border-t border-slate-200 pt-3 text-xs text-slate-400">
+          <p className="mt-5 border-t border-slate-200 pt-3 text-xs text-slate-500">
             If you report this, quote{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-600">
+            <code className="code-inline">
               {error.digest}
             </code>
             . It matches the entry in the server log for this failure.
