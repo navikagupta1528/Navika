@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "npm run db:start && tsx server.ts",
     "postinstall": "prisma generate",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "tsx server.ts --prod",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
