@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run db:start && tsx server.ts",
+    "postinstall": "prisma generate",
     "build": "next build",
     "start": "tsx server.ts --prod",
     "lint": "eslint",
