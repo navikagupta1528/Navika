@@ -34,8 +34,8 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { Role, PickupStatus, AlertType, NotificationType } from "@/generated/prisma/enums";
 import { studentScopeFor, busScopeFor } from "@/lib/student-scope";
-import { pushPickupUpdate, pushAlert } from "@/server/socket";
-import { notifyAdmins, notifyGuardiansOfPickup } from "@/lib/notifications";
+import { pushPickupUpdate, pushAlert } from "@/server/realtime-emit";
+import { notifyAdmins, notifyGuardiansOfPickup, notifyMany } from "@/lib/notifications";
 
 /** Who is acting. Resolved from the cookie by the action; explicit everywhere else. */
 export type Actor = { userId: string; role: Role };
@@ -312,6 +312,93 @@ export async function markWaiting(
     message: waiting ? "The driver can see you are waiting." : "Cleared.",
     revalidate: ["/student", "/parent", `/driver/checklist`, `/track/${record.busId}`],
   };
+}
+
+/**
+ * Confirm a child the bus left behind is accounted for.
+ *
+ * The one-tap button behind the guardian's "the bus left without your child"
+ * alert. The record stays MISSED — the bus really did leave without them — so
+ * this writes an acknowledgement on top of the fact rather than correcting it,
+ * and the reports can still ask "how many were left behind" and, within that,
+ * "how many were confirmed safe".
+ *
+ * Who may press it: a guardian of this child, the child themself, or an admin.
+ * The rule is a relationship check, not a role check, for the same reason every
+ * other operation here is — a parent confirming somebody else's child is safe
+ * would close an incident that is not theirs to close.
+ */
+export async function confirmPickupSafe(
+  actor: Actor,
+  input: { recordId: string },
+): Promise<OpResult> {
+  const { recordId } = input;
+  if (!recordId) return { ok: false, error: "Missing record." };
+
+  const record = await prisma.pickupRecord.findUnique({
+    where: { id: recordId },
+    select: {
+      id: true,
+      status: true,
+      safeMarkedAt: true,
+      tripId: true,
+      stop: { select: { name: true } },
+      student: {
+        select: {
+          user: { select: { id: true, name: true } },
+          guardians: { select: { parent: { select: { userId: true } } } },
+        },
+      },
+    },
+  });
+  if (!record) return { ok: false, error: "That record no longer exists." };
+
+  const entitled =
+    actor.role === Role.ADMIN ||
+    record.student.user.id === actor.userId ||
+    record.student.guardians.some((g) => g.parent.userId === actor.userId);
+  if (!entitled) {
+    return { ok: false, error: "That is not your child's record." };
+  }
+
+  // Both refusals are idempotent by design: a confirmation is a fact about a
+  // child, not a toggle, so pressing it twice must not write twice.
+  if (record.status !== PickupStatus.MISSED) {
+    return { ok: false, error: "Only a child the bus left behind needs confirming." };
+  }
+  if (record.safeMarkedAt) {
+    return { ok: false, error: "Already confirmed safe." };
+  }
+
+  const now = new Date();
+  await prisma.pickupRecord.update({
+    where: { id: recordId },
+    data: { safeMarkedAt: now, safeMarkedById: actor.userId },
+  });
+
+  // Tell the people who were told the child was left behind that they are safe.
+  // The same audience that got the alarm gets the all-clear, so a family that
+  // only reads the inbox still closes the loop.
+  const first = record.student.user.name.split(" ")[0];
+  const stopName = record.stop.name;
+  await notifyMany([
+    ...record.student.guardians.map((g) => ({
+      userId: g.parent.userId,
+      type: NotificationType.INFO,
+      title: `${first} is safe`,
+      body: `${first} was left at ${stopName} and has been confirmed safe.`,
+      href: "/parent",
+    })),
+    {
+      userId: record.student.user.id,
+      type: NotificationType.INFO,
+      title: "Marked safe",
+      body: `Your stop at ${stopName} has been confirmed.`,
+      href: "/student",
+    },
+  ]);
+
+  return { ok: true, revalidate: ["/parent", "/student"] };
 }
 
 // ---------------------------------------------------------------------------

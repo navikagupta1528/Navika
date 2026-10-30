@@ -22,7 +22,7 @@ import { useBusLocation, useSocketConnection } from "@/lib/realtime";
 import type { BusLocationPayload } from "@/lib/socket-events";
 import { Badge, Card, CardTitle } from "@/components/ui/primitives";
 import { describeFreshness, freshnessFromAge } from "@/lib/tracking";
-import { etaLabel } from "@/lib/utils";
+import { formatCountdown, readArrival } from "@/lib/arrival";
 
 export type LiveTrackingMapProps = {
   busId: string;
@@ -43,9 +43,25 @@ export type LiveTrackingMapProps = {
   initialPosition?: { lat: number; lng: number; at: string | number } | null;
   /** Where this particular viewer is watching from, if anywhere. */
   watchLabel?: string | null;
-  /** Minutes to the viewer's own stop, refreshed by the page, not the socket. */
+  /**
+   * The viewer's stop's coordinates, so the popup can count down to it live.
+   *
+   * Optional and separate from `watchLabel` because a caller that has a name but
+   * no coordinates (or the reverse) is better off showing a stale label than a
+   * fabricated countdown to a point it does not have.
+   */
+  watchStop?: { lat: number; lng: number } | null;
+  /** Minutes to the viewer's own stop, the server's reading at first paint. */
   etaMinutes?: number | null;
   height?: string;
+  /**
+   * The point to pulse a sonar ring around — the viewer's own stop.
+   *
+   * Separate from `watchStop` so a caller can show the countdown to a stop
+   * without pulsing it, or pulse a point it is not counting down to. Null
+   * means no pulse, which is the right answer for a viewer with no single stop.
+   */
+  pulseAt?: { lat: number; lng: number } | null;
 };
 
 export function LiveTrackingMap({
@@ -56,8 +72,10 @@ export function LiveTrackingMap({
   geometry,
   initialPosition,
   watchLabel = null,
+  watchStop = null,
   etaMinutes = null,
   height = "24rem",
+  pulseAt = null,
 }: LiveTrackingMapProps) {
   const [position, setPosition] = useState<BusLocationPayload | null>(() => {
     if (!initialPosition) return null;
@@ -128,6 +146,28 @@ export function LiveTrackingMap({
   const freshness = position ? freshnessFromAge(ageMs ?? 0) : 0;
   const shown = position;
 
+  /**
+   * The popup's ETA, computed from the same live reading the countdown card
+   * uses. It is not decoration and it is not the server's `etaMinutes` prop:
+   * that number is a snapshot from page load, and a popup that says "8 min" for
+   * ten minutes while the card beside it says "2 min" makes both look wrong.
+   */
+  const arrival = readArrival({
+    fix: position ? { lat: position.lat, lng: position.lng, at: position.at } : null,
+    stop:
+      watchStop && watchLabel
+        ? { name: watchLabel, lat: watchStop.lat, lng: watchStop.lng }
+        : null,
+    now,
+    initialEtaMinutes: etaMinutes,
+  });
+  const etaText =
+    arrival.kind === "stale"
+      ? "no live estimate"
+      : arrival.kind === "none"
+        ? "—"
+        : shortCountdown(arrival.seconds);
+
   const vehicles: MapVehicle[] = shown
     ? [
         {
@@ -137,7 +177,7 @@ export function LiveTrackingMap({
           label: busLabel,
           freshness,
           heading: shown.headingDeg,
-          detail: `${describeFreshness(ageMs ?? 0).label} · ${etaLabel(etaMinutes)} to ${watchLabel ?? "your stop"}`,
+          detail: `${describeFreshness(ageMs ?? 0).label} · ${etaText} to ${watchLabel ?? "your stop"}`,
         },
       ]
     : [];
@@ -170,6 +210,7 @@ export function LiveTrackingMap({
         vehicles={vehicles}
         height={height}
         emptyMessage="No stops on this route yet."
+        pulseAt={pulseAt}
       />
 
       <p className="mt-2 text-xs text-slate-500" aria-live="polite">
@@ -181,4 +222,10 @@ export function LiveTrackingMap({
       </p>
     </Card>
   );
+}
+
+/** "now" / "45 sec" / "12 min", for the one-line popup label. */
+function shortCountdown(seconds: number): string {
+  const { value, unit } = formatCountdown(seconds);
+  return unit ? `${value} ${unit}` : value;
 }

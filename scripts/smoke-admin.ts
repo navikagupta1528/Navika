@@ -31,7 +31,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
  */
 const PORT = process.argv[2] ?? process.env.PORT ?? "3000";
 const BASE = `http://127.0.0.1:${PORT}`;
-const PASSWORD = "navika123";
+const PASSWORD = "busguard123";
 
 let prisma: PrismaClient;
 let cookie = "";
@@ -180,7 +180,7 @@ async function login(email: string, password: string): Promise<boolean> {
     redirect: "manual",
   });
   const setCookies = res.headers.getSetCookie?.() ?? [];
-  const session = setCookies.find((h) => h.startsWith("navika_session="));
+  const session = setCookies.find((h) => h.startsWith("busguard_session="));
   cookie = session?.split(";")[0] ?? "";
   return Boolean(cookie);
 }
@@ -240,7 +240,7 @@ async function main() {
     // -----------------------------------------------------------------------
     console.log("--- authentication ---");
     report(
-      await login("admin@navika.test", PASSWORD),
+      await login("admin@busguard.test", PASSWORD),
       "admin can sign in and gets a session cookie",
     );
 
@@ -675,7 +675,7 @@ async function main() {
 
     // -----------------------------------------------------------------------
     console.log("\n--- a non-admin cannot reach any of it ---");
-    await login("driver1@navika.test", PASSWORD);
+    await login("driver1@busguard.test", PASSWORD);
     for (const path of ["/admin/stops", "/admin/trips", "/admin/students", "/admin/reports"]) {
       const res2 = await getPage(path);
       report(

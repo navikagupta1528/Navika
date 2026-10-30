@@ -1,11 +1,16 @@
-# Starts the dedicated Navika PostgreSQL cluster.
+# Starts the dedicated BusGuard PostgreSQL cluster.
 #
 #   npm run db:start
 #
 # Why this exists: the cluster lives at C:\navika-pg on port 5433, separate from
 # the PostgreSQL 17 Windows service on 5432 that belongs to ZyniVerse. It is a
-# plain process rather than a service, so after a reboot you must start it once
-# before the app will connect.
+# plain process rather than a service, so after a reboot it must be started
+# before the app can connect.
+#
+# `npm run dev` runs this script first, so in development the reboot case is
+# handled for you. This is safe to chain because the script exits immediately
+# when the port is already listening, and the port is tested with a real
+# connection rather than the PID file.
 #
 # Run it as Administrator to register it as a Windows service and skip this
 # entirely (one time only):
@@ -44,11 +49,11 @@ try {
 }
 
 if ($isUp) {
-    Write-Host "Navika database already listening on port $Port." -ForegroundColor Green
+    Write-Host "BusGuard database already listening on port $Port." -ForegroundColor Green
     exit 0
 }
 
-Write-Host "Starting Navika database on port $Port ..."
+Write-Host "Starting BusGuard database on port $Port ..."
 
 # pg_ctl is launched detached, with its own output files, and not waited on.
 #
@@ -63,9 +68,18 @@ Write-Host "Starting Navika database on port $Port ..."
 #     first backend fork fails with 0xC0000142, and it takes the whole cluster
 #     down on every subsequent connection. Detaching means the postmaster
 #     belongs to no shell and survives.
+#
+# `-WindowStyle Hidden` is what actually detaches it. `-NoNewWindow`, which
+# this used to pass, does the opposite of what it sounds like: it makes the
+# child share the CALLER's console, so the postmaster stays in the caller's
+# process group and receives the Ctrl+C that a console teardown sends. The
+# server then dies the moment the shell that started it goes away, and the
+# cluster is left in the half-started state described above. A separate
+# hidden console gives the postmaster a console of its own, so nothing the
+# caller does reaches it.
 Start-Process -FilePath $pgCtl `
     -ArgumentList @('-D', $dataDir, '-l', $logFile, '-w', '-t', '30', 'start') `
-    -NoNewWindow `
+    -WindowStyle Hidden `
     -RedirectStandardOutput $errFile `
     -RedirectStandardError "$errFile.err"
 
@@ -78,7 +92,7 @@ while ((Get-Date) -lt $deadline) {
         $attempt = $probe.ConnectAsync('127.0.0.1', $Port)
         if ($attempt.Wait(1000) -and $probe.Connected) {
             $probe.Dispose()
-            Write-Host "Navika database is up on port $Port." -ForegroundColor Green
+            Write-Host "BusGuard database is up on port $Port." -ForegroundColor Green
             Write-Host "  data dir : $dataDir"
             Write-Host "  log file : $logFile"
             exit 0

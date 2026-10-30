@@ -124,7 +124,7 @@ export function safeDownloadFilename(name: string): string {
     .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, 120);
 
-  return cleaned.length > 0 ? cleaned : "navika-export.csv";
+  return cleaned.length > 0 ? cleaned : "busguard-export.csv";
 }
 
 /**

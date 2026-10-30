@@ -59,14 +59,14 @@ async function main() {
   );
 
   const cookie = await mintCookie("ADMIN");
-  const authed = await connect(`navika_session=${cookie}`);
+  const authed = await connect(`busguard_session=${cookie}`);
   console.log(
     authed.ok
       ? "  pass  signed session cookie accepted"
       : `  FAIL  signed session cookie rejected ("${authed.error}")`,
   );
 
-  const bad = await connect("navika_session=not-a-real-token");
+  const bad = await connect("busguard_session=not-a-real-token");
   console.log(
     !bad.ok
       ? `  pass  forged cookie refused ("${bad.error}")`

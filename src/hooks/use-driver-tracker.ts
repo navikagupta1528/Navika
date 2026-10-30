@@ -207,6 +207,10 @@ export function useDriverTracker(): DriverTracker {
           speedKph: next.speedKph ?? undefined,
           headingDeg: headingDeg ?? undefined,
           accuracyM: Number.isFinite(next.accuracyM) ? next.accuracyM : undefined,
+          // The fix's own timestamp. If the socket buffers this while out of
+          // signal and flushes it later, the server can tell it is a replay and
+          // drop it instead of drawing the bus jumping backwards.
+          at: next.at,
         } satisfies DriverLocationPayload);
       },
       (error) => {

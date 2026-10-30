@@ -7,6 +7,8 @@ import {
   Badge,
   Card,
   CardTitle,
+  EmptyState,
+  IconBadge,
   StatTile,
   StatusDot,
 } from "@/components/ui/primitives";
@@ -35,6 +37,8 @@ export default async function AdminDashboard() {
       <PageHeader
         title="Transport overview"
         description="Everything happening across the fleet right now."
+        eyebrow="Transport office"
+        icon="overview"
       />
 
       <div className="space-y-6">
@@ -44,30 +48,39 @@ export default async function AdminDashboard() {
             value={`${overview.activeBuses}/${overview.totalBuses}`}
             sub="active"
             tone="blue"
+            icon="bus"
           />
-          <StatTile label="Students" value={overview.totalStudents} tone="violet" />
-          <StatTile label="Drivers" value={overview.totalDrivers} />
+          <StatTile
+            label="Students"
+            value={overview.totalStudents}
+            tone="violet"
+            icon="students"
+          />
+          <StatTile label="Drivers" value={overview.totalDrivers} icon="drivers" />
           <StatTile
             label="Open alerts"
             value={overview.openAlerts}
             sub="need attention"
             tone={overview.openAlerts > 0 ? "red" : "emerald"}
+            icon="alerts"
           />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Routes" value={overview.totalRoutes} />
-          <StatTile label="Stops" value={overview.totalStops} />
-          <StatTile label="Trips today" value={overview.tripsToday} />
+          <StatTile label="Routes" value={overview.totalRoutes} icon="routes" />
+          <StatTile label="Stops" value={overview.totalStops} icon="stops" />
+          <StatTile label="Trips today" value={overview.tripsToday} icon="trips" />
           <StatTile
             label="On the road"
             value={overview.tripsOngoing}
             tone={overview.tripsOngoing > 0 ? "emerald" : "slate"}
+            icon="navigate"
           />
         </div>
 
         <Card>
           <CardTitle
+            icon="radio"
             hint="Buses that have reported a position recently"
             action={
               <Link href="/fleet" className="text-xs text-brand-700 underline">
@@ -79,10 +92,11 @@ export default async function AdminDashboard() {
           </CardTitle>
 
           {overview.liveBuses.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              No bus has reported a location yet. Live positions start appearing
-              once a driver begins a trip with location sharing on.
-            </p>
+            <EmptyState
+              icon="radio"
+              title="No bus has reported a location yet"
+              description="Live positions start appearing once a driver begins a trip with location sharing on."
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -141,12 +155,15 @@ export default async function AdminDashboard() {
               <Link
                 key={section.href}
                 href={section.href}
-                className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
+                className="busguard-linkcard group rounded-2xl border border-slate-200 bg-white p-4 hover:border-brand-300"
               >
-                <span aria-hidden className="text-xl">
-                  {section.icon}
+                {/* The tile carries `busguard-tile`, which lifts and tilts a few
+                    degrees when the card is hovered or focused - see the
+                    transition in globals.css. */}
+                <span className="busguard-tile inline-flex">
+                  <IconBadge name={section.icon} tone="brand" size="lg" />
                 </span>
-                <p className="mt-2 text-sm font-medium text-slate-900">
+                <p className="mt-3 text-sm font-medium text-slate-900">
                   {section.label}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">

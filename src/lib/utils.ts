@@ -52,6 +52,23 @@ export function etaLabel(minutes: number | null): string {
  */
 export const LIVE_WINDOW_MS = 2 * 60 * 1000;
 
+/**
+ * The current instant, in milliseconds.
+ *
+ * A one-line wrapper, and it earns its place: React's purity rule forbids
+ * `Date.now()` in a component body, but a server component legitimately needs a
+ * single request-time reading to hand down as `serverNow`. Reading it here keeps
+ * that one reading in one place instead of scattering direct clock calls that
+ * two siblings could disagree about — a bus exactly on the freshness boundary
+ * would then be live to one tile and stale to the next.
+ *
+ * The contract is unchanged by the wrapper: read it once per request and thread
+ * the value through props. Do not call it again mid-tree.
+ */
+export function currentTimeMs(): number {
+  return Date.now();
+}
+
 export function isStale(
   timestamp: Date | string | null | undefined,
   maxAgeMs: number = LIVE_WINDOW_MS,

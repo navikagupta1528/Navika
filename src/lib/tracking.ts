@@ -199,6 +199,38 @@ export function resolveHeadingDeg(
 }
 
 // ---------------------------------------------------------------------------
+// Server-side freshness of a *reported* fix
+// ---------------------------------------------------------------------------
+
+export type ReportAge = "fresh" | "stale" | "future";
+
+/**
+ * Classify a report's own timestamp, on the server.
+ *
+ * The client already refuses to *send* a stale fix (`shouldAcceptFix`), but a
+ * queued ping can still arrive late. Socket.IO buffers events while a phone is
+ * in a tunnel and flushes them on reconnect, and each buffered event carries the
+ * timestamp of when the fix was taken. Re-stamping those with the server's clock
+ * at arrival would draw the bus jumping backwards to where it was five minutes
+ * ago - precisely the teleport the client rules exist to prevent - with a fresh
+ * timestamp hiding it. So the server checks the claim itself before believing it.
+ *
+ * A report with no timestamp is accepted. It is either an older client that
+ * predates this field or the server's own simulator, and neither is replaying
+ * anything; refusing them would break both to catch a case they cannot have.
+ */
+export function classifyReportAge(
+  reportedAt: number | null | undefined,
+  nowMs: number,
+): ReportAge {
+  if (reportedAt == null || !Number.isFinite(reportedAt)) return "fresh";
+  const age = nowMs - reportedAt;
+  if (age > CLOCK_SKEW_PAST_MS) return "stale";
+  if (age < -CLOCK_SKEW_FUTURE_MS) return "future";
+  return "fresh";
+}
+
+// ---------------------------------------------------------------------------
 // Freshness
 // ---------------------------------------------------------------------------
 

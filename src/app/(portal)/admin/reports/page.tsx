@@ -55,11 +55,15 @@ export default async function ReportsPage({
       <PageHeader
         title="Reports"
         description="Attendance across the fleet. Numbers come straight from completed trips, so they match what parents saw."
+        icon="reports"
       />
 
       <div className="space-y-6">
         <Card>
-          <CardTitle hint="Pickups are recorded when the driver checks a student in.">
+          <CardTitle
+            icon="clock"
+            hint="Pickups are recorded when the driver checks a student in."
+          >
             Date range
           </CardTitle>
           <form method="get" className="flex flex-wrap items-end gap-3">
@@ -118,11 +122,13 @@ export default async function ReportsPage({
 
         {invalid || !report ? (
           <EmptyState
+            icon="alert"
             title="Invalid date range"
             description="Pick two valid dates and run the report again."
           />
         ) : report.totals.trips === 0 ? (
           <EmptyState
+            icon="trips"
             title="No completed trips in this range"
             description="Attendance is recorded when a trip finishes, so a range with only scheduled or cancelled trips has nothing to show. Try a wider window."
             action={
@@ -134,18 +140,30 @@ export default async function ReportsPage({
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatTile label="Completed trips" value={report.totals.trips} tone="blue" />
-              <StatTile label="Students picked" value={report.totals.picked} tone="emerald" />
+              <StatTile
+                label="Completed trips"
+                value={report.totals.trips}
+                tone="blue"
+                icon="trips"
+              />
+              <StatTile
+                label="Students picked"
+                value={report.totals.picked}
+                tone="emerald"
+                icon="check"
+              />
               <StatTile
                 label="Missed"
                 value={report.totals.missed}
                 tone={report.totals.missed > 0 ? "red" : "slate"}
+                icon="alert"
               />
               <StatTile
                 label="Pick-up rate"
                 value={`${pickRate}%`}
                 sub={settled > 0 ? `${settled} expected` : undefined}
                 tone={pickRate >= 95 ? "emerald" : pickRate >= 85 ? "amber" : "red"}
+                icon="trendUp"
               />
             </div>
 
@@ -162,7 +180,10 @@ export default async function ReportsPage({
             ) : null}
 
             <Card>
-              <CardTitle hint="Attendance is counted only from completed trips.">
+              <CardTitle
+                icon="bus"
+                hint="Attendance is counted only from completed trips."
+              >
                 By bus
               </CardTitle>
               <DataTable head={["Bus", "Route", "Trips", "Picked", "Missed", "Rate"]}>
@@ -219,14 +240,20 @@ export default async function ReportsPage({
             </Card>
 
             <Card>
-              <CardTitle hint="Each bar is that day's completed trips, scaled to the busiest day.">
+              <CardTitle
+                icon="reports"
+                hint="Each bar is that day's completed trips, scaled to the busiest day."
+              >
                 Daily trend
               </CardTitle>
               <DailyChart daily={report.daily} />
             </Card>
 
             <Card>
-              <CardTitle hint="Who was left behind most in this window. Worth a phone call.">
+              <CardTitle
+                icon="alert"
+                hint="Who was left behind most in this window. Worth a phone call."
+              >
                 Repeatedly missed
               </CardTitle>
               {report.chronic.length === 0 ? (

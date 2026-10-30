@@ -72,6 +72,7 @@ export default async function TripDetailPage({
       <PageHeader
         title={`${trip.bus.busNumber} · ${trip.direction === "PICKUP" ? "Home to college" : "College to home"}`}
         description={`${formatDate(trip.date)} · planned ${formatTime(trip.scheduledStart)} · ${trip.bus.route?.name ?? "no route"}`}
+        icon="trips"
         action={
           <div className="flex flex-wrap gap-2">
             {/*
@@ -188,7 +189,10 @@ export default async function TripDetailPage({
 
         {trip.status === "SCHEDULED" ? (
           <Card>
-            <CardTitle hint="Nobody can be marked until the trip starts, because attendance rows are created at start.">
+            <CardTitle
+              icon="clipboard"
+              hint="Nobody can be marked until the trip starts, because attendance rows are created at start."
+            >
               Attendance preview
             </CardTitle>
             <p className="text-sm text-slate-600">
@@ -204,6 +208,7 @@ export default async function TripDetailPage({
           <div className="space-y-4">
             {stops.length === 0 ? (
               <EmptyState
+                icon="stops"
                 title="This route has no stops"
                 description="Without stops there is no roster to build. Add stops to the route, then schedule a new trip."
                 action={
@@ -337,7 +342,7 @@ export default async function TripDetailPage({
 
           <div className="space-y-6">
             <Card>
-              <CardTitle>Trip</CardTitle>
+              <CardTitle icon="trips">Trip</CardTitle>
               <DetailList
                 items={[
                   {
@@ -393,7 +398,10 @@ export default async function TripDetailPage({
             </Card>
 
             <Card>
-              <CardTitle hint="Driver drives this trip, whether or not the bus is assigned to them.">
+              <CardTitle
+                icon="drivers"
+                hint="Driver drives this trip, whether or not the bus is assigned to them."
+              >
                 Driver
               </CardTitle>
               <p className="text-sm font-medium text-slate-900">{trip.driver.name}</p>
@@ -427,7 +435,9 @@ export default async function TripDetailPage({
 
             {trip.alerts.length > 0 ? (
               <Card>
-                <CardTitle hint="Raised during this trip">Alerts</CardTitle>
+                <CardTitle icon="alerts" tone="red" hint="Raised during this trip">
+                  Alerts
+                </CardTitle>
                 <ul className="space-y-2 text-sm">
                   {trip.alerts.map((a) => (
                     <li key={a.id} className="rounded-lg bg-red-50 px-3 py-2 inset-ring-1 inset-ring-red-200">

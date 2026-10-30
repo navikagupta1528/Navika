@@ -11,6 +11,7 @@ export default function NewRoutePage() {
       <PageHeader
         title="New route"
         description="A named sequence of stops that a bus runs."
+        icon="routes"
         action={
           <Link href="/admin/routes" className="btn-secondary">
             Back to routes
@@ -20,7 +21,11 @@ export default function NewRoutePage() {
 
       <div className="max-w-3xl">
         <Card>
-          <CardTitle hint="Add the stops to the sequence after creating the route.">
+          <CardTitle
+            icon="routes"
+            size="md"
+            hint="Add the stops to the sequence after creating the route."
+          >
             Route details
           </CardTitle>
           <EntityForm

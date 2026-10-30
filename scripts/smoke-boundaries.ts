@@ -2,7 +2,7 @@
  * Route boundary smoke test.
  *
  * Every one of these is an HTTP request with no session, or with the wrong one,
- * against a running Navika. They exist because the boundary between "not
+ * against a running BusGuard. They exist because the boundary between "not
  * signed in" and "signed in as the wrong person" is enforced in two places at
  * once - the proxy, which answers first, and `requireRole` in each page - and
  * the interesting failures are in the gap between them.
@@ -43,15 +43,20 @@ function section(title: string): void {
 }
 
 /**
- * Every page in the portal, plus the root.
+ * Every page behind the sign-in wall.
  *
  * Kept as an explicit list rather than read off the filesystem: a route that is
  * missing from this list is a route nobody has ever requested anonymously, which
  * is exactly how `/track` and `/notifications` came to be unprotected by the
  * proxy in the first place.
+ *
+ * `/` is deliberately NOT here. It used to be - the root route was a redirect to
+ * `/login`, so an anonymous request for it was correctly a bounce. It is now the
+ * public landing page and answers 200, so keeping it in this list would assert
+ * the opposite of the behaviour we want. It gets its own section below, for both
+ * the anonymous case and the signed-in one.
  */
 const PORTAL_PAGES = [
-  "/",
   "/admin",
   "/admin/alerts",
   "/admin/buses",
@@ -82,6 +87,28 @@ const PORTAL_PAGES = [
 ];
 
 async function main(): Promise<void> {
+  // ------------------------------------------------------- public landing
+  section("the landing page is public");
+
+  /*
+   * `/` is the one route an anonymous visitor is *supposed* to reach, so it is
+   * the one route that must not be in the redirect sweep above. Asserting the
+   * 200 is the whole point: if someone later moves the session check back into
+   * `page.tsx`, this route goes dynamic but still answers 200 - so the second
+   * check asserts on the rendered headline, which is what actually proves a
+   * landing page rendered rather than an empty shell.
+   */
+  const landing = await fetch(`${BASE}/`, { redirect: "manual" });
+  report(
+    landing.status === 200,
+    "an anonymous visitor gets the landing page, not a redirect",
+    `-> ${landing.status}`,
+  );
+  report(
+    visibleText(await landing.text()).includes("Know exactly where the bus is"),
+    "the landing page renders its headline",
+  );
+
   // ------------------------------------------------------------ anonymous
   section("an anonymous visitor is redirected by a real 307, not a meta-refresh");
 
@@ -114,7 +141,7 @@ async function main(): Promise<void> {
   const sample = await fetch(`${BASE}/admin/reports`, { redirect: "manual" });
   const sampleBody = await sample.text();
   report(
-    !/<[a-z!][^>]*>/i.test(sampleBody) && !/dashboard|navika|loading/i.test(sampleBody),
+    !/<[a-z!][^>]*>/i.test(sampleBody) && !/dashboard|busguard|loading/i.test(sampleBody),
     "the redirect carries no rendered page",
     `${sampleBody.length} bytes: ${JSON.stringify(sampleBody.slice(0, 60))}`,
   );
@@ -137,10 +164,10 @@ async function main(): Promise<void> {
   section("a signed-in user in the wrong place is redirected to their own dashboard");
 
   const ROLES = [
-    { email: "admin@navika.test", home: "/admin" },
-    { email: "driver1@navika.test", home: "/driver" },
-    { email: "parent1@navika.test", home: "/parent" },
-    { email: "aarav.sharma0@student.navika.test", home: "/student" },
+    { email: "admin@busguard.test", home: "/admin" },
+    { email: "driver1@busguard.test", home: "/driver" },
+    { email: "parent1@busguard.test", home: "/parent" },
+    { email: "aarav.sharma0@student.busguard.test", home: "/student" },
   ] as const;
 
   /*
@@ -211,6 +238,19 @@ async function main(): Promise<void> {
       `${email} visiting /login goes straight to their dashboard`,
       `-> ${bounce.status} ${bounce.location}`,
     );
+
+    /*
+     * And a signed-in user should never be shown the marketing page either. The
+     * redirect for `/` lives in the proxy precisely so it happens before the
+     * landing page renders; if it were left to the page, this request would come
+     * back as a 200 with a meta-refresh.
+     */
+    const root = await session.get("/");
+    report(
+      (root.status === 307 || root.status === 302) && root.location === home,
+      `${email} visiting / goes straight to their dashboard`,
+      `-> ${root.status} ${root.location}`,
+    );
   }
 
   // ------------------------------------------------------------ deep prefix
@@ -236,7 +276,7 @@ async function main(): Promise<void> {
   section("a forged cookie is not a session");
 
   const forged = await fetch(`${BASE}/admin`, {
-    headers: { cookie: "navika_session=not.a.real.token" },
+    headers: { cookie: "busguard_session=not.a.real.token" },
     redirect: "manual",
   });
   report(
@@ -246,7 +286,7 @@ async function main(): Promise<void> {
   );
 
   const tampered = await fetch(`${BASE}/admin`, {
-    headers: { cookie: "navika_session=eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiQURNSU4ifQ.bad" },
+    headers: { cookie: "busguard_session=eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiQURNSU4ifQ.bad" },
     redirect: "manual",
   });
   report(
@@ -283,7 +323,7 @@ async function main(): Promise<void> {
   }
 
   // An authenticated admin gets real CSV, and it is not the login page.
-  const admin = await login(BASE, "admin@navika.test", PASSWORD);
+  const admin = await login(BASE, "admin@busguard.test", PASSWORD);
   const csv = await admin.get("/api/admin/reports/attendance.csv?from=2026-09-01&to=2026-10-02");
   report(
     csv.status === 200 && !visibleText(csv.html).includes("Sign in"),
@@ -297,7 +337,7 @@ async function main(): Promise<void> {
   );
 
   // A driver must not be able to export attendance.
-  const driver = await login(BASE, "driver1@navika.test", PASSWORD);
+  const driver = await login(BASE, "driver1@busguard.test", PASSWORD);
   const deniedCsv = await driver.get("/api/admin/reports/attendance.csv?from=2026-09-01&to=2026-10-02");
   report(
     deniedCsv.status === 403,

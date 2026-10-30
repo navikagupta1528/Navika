@@ -33,6 +33,7 @@ export default async function BusesPage() {
       <PageHeader
         title="Fleet"
         description="Vehicles, their routes, and how full they are."
+        icon="fleet"
         action={
           <Link href="/admin/buses/new" className="btn-primary">
             New bus
@@ -42,7 +43,7 @@ export default async function BusesPage() {
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-3">
-          <StatTile label="Buses" value={buses.length} tone="blue" />
+          <StatTile label="Buses" value={buses.length} tone="blue" icon="bus" />
           <StatTile
             label="Seats vs enrolled"
             value={`${totalEnrolled}/${totalSeats}`}
@@ -52,12 +53,14 @@ export default async function BusesPage() {
                 : "—"
             }
             tone={totalEnrolled > totalSeats ? "red" : "emerald"}
+            icon="users"
           />
           <StatTile
             label="Overbooked"
             value={overbooked.length}
             sub={overbooked.length > 0 ? "need attention" : "all within capacity"}
             tone={overbooked.length > 0 ? "red" : "emerald"}
+            icon="alert"
           />
         </div>
 
@@ -73,7 +76,10 @@ export default async function BusesPage() {
         ) : null}
 
         <Card>
-          <CardTitle hint="Enrolment counts come from active assignments only.">
+          <CardTitle
+            icon="fleet"
+            hint="Enrolment counts come from active assignments only."
+          >
             All buses
           </CardTitle>
 

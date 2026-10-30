@@ -5,12 +5,20 @@ import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { login, type AuthState } from "@/app/actions/auth";
 import { FieldError, describedBy } from "./field-error";
+import { Spinner } from "@/components/ui/primitives";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
-      {pending ? "Signing in…" : "Sign in"}
+      {pending ? (
+        <>
+          <Spinner />
+          Signing in…
+        </>
+      ) : (
+        "Sign in"
+      )}
     </button>
   );
 }

@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/db";
-import { getStudentAssignment } from "@/lib/queries";
+import { getStudentAssignment, getMissedPickupsToday } from "@/lib/queries";
 import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { WaitingButton } from "@/components/tracking/waiting-button";
+import { SafeButton } from "@/components/tracking/safe-button";
 import { EmergencyButton } from "@/components/tracking/emergency-button";
+import { ArrivalCountdown } from "@/components/tracking/arrival-countdown";
 import {
   Badge,
   Card,
@@ -15,7 +17,7 @@ import {
   StatTile,
   StatusDot,
 } from "@/components/ui/primitives";
-import { etaLabel, isStale, timeAgo } from "@/lib/utils";
+import { etaLabel, isStale, timeAgo, currentTimeMs } from "@/lib/utils";
 import { haversineMeters, estimateEtaMinutes } from "@/lib/geo";
 
 export const metadata: Metadata = { title: "My children" };
@@ -25,7 +27,18 @@ export default async function ParentDashboard() {
   const user = await getCurrentUser();
   const children = user?.parentProfile?.children ?? [];
 
-  const today = new Date();
+  /**
+   * One clock read for the whole render, taken through `currentTimeMs` because
+   * the purity rule forbids `Date.now()` in a component body.
+   *
+   * Read once and threaded down rather than letting each countdown call the
+   * clock itself: two reads on the same page are two instants, and a bus sitting
+   * exactly on the freshness boundary would be live to one tile and stale to the
+   * next. The same rule `getFleetPositions` follows.
+   */
+  const nowMs = currentTimeMs();
+
+  const today = new Date(nowMs);
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -81,12 +94,27 @@ export default async function ParentDashboard() {
     }),
   );
 
+  /**
+   * Today's children the bus left behind, and have not yet been confirmed safe.
+   *
+   * Fetched once for the page rather than per child, and scoped to this
+   * parent's own children by the same rule every other read here follows. It is
+   * the one card that must be impossible to miss, so it sits above everything
+   * else rather than inside a child's card where it could scroll out of view.
+   */
+  const missed = await getMissedPickupsToday(
+    children.map((link) => link.student.id),
+    { gte: today, lt: tomorrow },
+  );
+
   const anyTracking = rows.some((row) => row.assignment);
 
-  const nav = [
-    { href: "/parent", label: "My children", icon: "👨‍👩‍👧", exact: true },
-    ...(anyTracking ? [{ href: "/fleet", label: "All buses", icon: "📡" }] : []),
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
+  const nav: NavItem[] = [
+    { href: "/parent", label: "My children", icon: "users", exact: true },
+    ...(anyTracking
+      ? ([{ href: "/fleet", label: "All buses", icon: "radio" }] satisfies NavItem[])
+      : []),
+    { href: "/notifications", label: "Notifications", icon: "bell" },
   ];
 
   return (
@@ -98,10 +126,12 @@ export default async function ParentDashboard() {
       <PageHeader
         title="My children"
         description="Follow the bus your child travels on."
+        icon="users"
       />
 
       {rows.length === 0 ? (
         <EmptyState
+          icon="users"
           title="No children linked yet"
           description="Ask the college office to register your child, then link their enrollment number from the registration page."
         />
@@ -113,9 +143,25 @@ export default async function ParentDashboard() {
               silently picks the wrong bus. */}
           <EmergencyButton />
 
+          {missed.length > 0 && (
+            <div className="space-y-3">
+              {missed.map((m) => (
+                <SafeButton
+                  key={m.id}
+                  recordId={m.id}
+                  studentName={m.student.user.name}
+                  stopName={m.stop.name}
+                  busLabel={m.trip.bus.busNumber}
+                  perspective="guardian"
+                />
+              ))}
+            </div>
+          )}
+
           {rows.map((row) => (
             <Card key={row.student.id}>
               <CardTitle
+                icon="graduation"
                 hint={`${row.student.enrollmentNo}${row.student.department ? ` · ${row.student.department}` : ""}`}
                 action={
                   row.assignment ? (
@@ -140,15 +186,45 @@ export default async function ParentDashboard() {
                       value={row.bus?.busNumber ?? "—"}
                       sub={row.bus?.registrationNo}
                       tone="blue"
+                      icon="bus"
                     />
                     <StatTile
                       label="Stop"
                       value={row.assignment.stop.name}
                       sub={row.assignment.stop.address}
+                      icon="pin"
                     />
                     <StatTile
                       label="Arriving in"
-                      value={etaLabel(row.eta)}
+                      icon="clock"
+                      value={
+                        row.bus && row.assignment ? (
+                          <ArrivalCountdown
+                            variant="compact"
+                            busId={row.bus.id}
+                            stop={{
+                              name: row.assignment.stop.name,
+                              lat: row.assignment.stop.lat,
+                              lng: row.assignment.stop.lng,
+                            }}
+                            initialEtaMinutes={row.eta}
+                            serverNow={nowMs}
+                            initialPosition={
+                              row.bus.currentLat != null &&
+                              row.bus.currentLng != null &&
+                              row.bus.lastLocationAt != null
+                                ? {
+                                    lat: row.bus.currentLat,
+                                    lng: row.bus.currentLng,
+                                    at: row.bus.lastLocationAt.getTime(),
+                                  }
+                                : null
+                            }
+                          />
+                        ) : (
+                          etaLabel(row.eta)
+                        )
+                      }
                       sub={
                         row.distanceM !== null
                           ? `${(row.distanceM / 1000).toFixed(1)} km away`
@@ -158,6 +234,7 @@ export default async function ParentDashboard() {
                     />
                     <StatTile
                       label="Bus status"
+                      icon="signal"
                       value={
                         <StatusDot
                           online={row.isLive}

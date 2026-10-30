@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": contentDisposition(
-        `navika-attendance-${range.from}-to-${range.to}.csv`,
+        `busguard-attendance-${range.from}-to-${range.to}.csv`,
       ),
       // An attendance register is the most sensitive thing this app holds, and a
       // browser or an intermediary cache must never keep a copy of it.

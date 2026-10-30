@@ -27,6 +27,7 @@ import {
   setPickupStatus,
   closeStop,
   markWaiting as markWaitingOp,
+  confirmPickupSafe as confirmPickupSafeOp,
   type OpResult,
 } from "@/lib/attendance";
 
@@ -117,4 +118,19 @@ export async function markWaiting(formData: FormData): Promise<PortalActionResul
       waiting: text(formData, "waiting") === "true",
     }),
   );
+}
+
+/**
+ * A guardian confirms a child the bus left behind is safe.
+ *
+ * The single write behind the red card on the parent and student dashboards.
+ * All of the rule — whose child this may be, and what state it must be in — lives
+ * in `confirmPickupSafe` in `@/lib/attendance`, so it is exercised by the
+ * tracking smoke suite rather than only by a hand-built form.
+ */
+export async function confirmPickupSafe(formData: FormData): Promise<PortalActionResult> {
+  const actor = await currentActor();
+  if ("ok" in actor) return actor;
+
+  return run(() => confirmPickupSafeOp(actor, { recordId: text(formData, "recordId") }));
 }

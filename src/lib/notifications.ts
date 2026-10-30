@@ -1,4 +1,11 @@
-import "server-only";
+/*
+ * NOTE: no `import "server-only"` here, for the same reason `db.ts` has none.
+ * The geofence watcher delivers its alerts through `notifyMany`, and it runs on
+ * the plain-Node custom server (`tsx server.ts`), outside React's `react-server`
+ * condition where the marker package throws. See `src/lib/push.ts` for the full
+ * note; every consumer of this file is a Server Component, a Server Action or
+ * Node, so nothing here can leak into the browser bundle.
+ */
 
 /**
  * Who gets told what, and when.
@@ -19,7 +26,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { NotificationType, Role } from "@/generated/prisma/enums";
-import { pushToUser } from "@/server/socket";
+import { pushToUser } from "@/server/realtime-emit";
 import { sendPushToUser } from "@/lib/push";
 import { formatTime } from "@/lib/utils";
 

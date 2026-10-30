@@ -121,4 +121,14 @@ export type DriverLocationPayload = {
   speedKph?: number;
   headingDeg?: number;
   accuracyM?: number;
+  /**
+   * Device clock when the fix was taken, epoch ms.
+   *
+   * Sent so the server can drop a *replayed* ping. Socket.IO buffers events
+   * while a phone is out of signal and flushes them on reconnect; without this
+   * the server would stamp each buffered fix with the time it arrived, and the
+   * bus would appear to jump backwards to where it was minutes ago. Optional so
+   * an older client keeps working.
+   */
+  at?: number;
 };

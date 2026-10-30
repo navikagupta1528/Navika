@@ -64,6 +64,7 @@ export default async function RouteDetailPage({
       <PageHeader
         title={route.name}
         description={route.description ?? `Route ${route.code}`}
+        icon="routes"
         action={
           <Link href="/admin/routes" className="btn-secondary">
             Back to routes
@@ -75,7 +76,10 @@ export default async function RouteDetailPage({
         <div className="space-y-6">
           {route.routeStops.length > 0 ? (
             <Card>
-              <CardTitle hint="Drag a numbered marker to move that stop in the sequence.">
+              <CardTitle
+                icon="map"
+                hint="Drag a numbered marker to move that stop in the sequence."
+              >
                 Route map
               </CardTitle>
               <RouteMapEditor
@@ -107,6 +111,7 @@ export default async function RouteDetailPage({
 
             {route.routeStops.length === 0 ? (
               <EmptyState
+                icon="stops"
                 title="No stops on this route"
                 description="Add stops below. Until there is at least one, buses on this route cannot run a trip."
               />
@@ -239,7 +244,7 @@ export default async function RouteDetailPage({
           </Card>
 
           <Card>
-            <CardTitle>Route details</CardTitle>
+            <CardTitle icon="routes">Route details</CardTitle>
             <EntityForm
               fields={routeDefaults(route)}
               action={saveRoute}
@@ -252,7 +257,7 @@ export default async function RouteDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle icon="overview">Summary</CardTitle>
             <DetailList
               items={[
                 { label: "Code", value: <span className="font-mono">{route.code}</span> },
@@ -311,8 +316,10 @@ export default async function RouteDetailPage({
             ) : null}
           </Card>
 
-          <Card>
-            <CardTitle>Danger zone</CardTitle>
+          <Card accent="red">
+            <CardTitle icon="alert" tone="red">
+              Danger zone
+            </CardTitle>
             {routeDeletable ? (
               <>
                 <p className="mb-3 text-xs text-slate-500">

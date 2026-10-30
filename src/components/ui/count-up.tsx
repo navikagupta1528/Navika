@@ -177,7 +177,7 @@ export function CountUp({
 
   return (
     <span
-      className={cn("navika-count-up tabular-nums", className)}
+      className={cn("busguard-count-up tabular-nums", className)}
       data-changed={moving ? "true" : undefined}
     >
       {shown}

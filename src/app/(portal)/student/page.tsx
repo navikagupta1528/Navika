@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/db";
-import { getStudentAssignment } from "@/lib/queries";
+import { getStudentAssignment, getMissedPickupsToday } from "@/lib/queries";
 import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { WaitingButton } from "@/components/tracking/waiting-button";
+import { SafeButton } from "@/components/tracking/safe-button";
 import { EmergencyButton } from "@/components/tracking/emergency-button";
 import {
   Badge,
@@ -55,6 +56,18 @@ export default async function StudentDashboard() {
         })
       : null;
 
+  /**
+   * A stop the bus has already left without them, not yet confirmed safe.
+   *
+   * Scoped to the student themself by passing their own profile id — the same
+   * rule the waiting button follows. Shown above everything else, because a
+   * student who has been left behind is the one case where the page must not
+   * wait to be scrolled to.
+   */
+  const missed = profile
+    ? await getMissedPickupsToday([profile.id], { gte: today, lt: tomorrow })
+    : [];
+
   const bus = assignment?.bus;
   const distanceM =
     bus?.currentLat != null &&
@@ -76,12 +89,12 @@ export default async function StudentDashboard() {
 
   const isLive = !isStale(bus?.lastLocationAt);
 
-  const nav = [
-    { href: "/student", label: "My bus", icon: "🚌", exact: true },
+  const nav: NavItem[] = [
+    { href: "/student", label: "My bus", icon: "bus", exact: true },
     ...(assignment
-      ? [{ href: `/track/${assignment.bus.id}`, label: "Live tracking", icon: "📡" }]
+      ? ([{ href: `/track/${assignment.bus.id}`, label: "Live tracking", icon: "radio" }] satisfies NavItem[])
       : []),
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
+    { href: "/notifications", label: "Notifications", icon: "bell" },
   ];
 
   return (
@@ -102,8 +115,22 @@ export default async function StudentDashboard() {
         }
       />
 
-      {!assignment ? (
+      {missed.length > 0 && (
+        <div className="space-y-3">
+          {missed.map((m) => (
+            <SafeButton
+              key={m.id}
+              recordId={m.id}
+              studentName={user?.name ?? "You"}
+              stopName={m.stop.name}
+              busLabel={m.trip.bus.busNumber}
+              perspective="student"
+            />
+          ))}
+        </div>
+      )}      {!assignment ? (
         <EmptyState
+          icon="bus"
           title="You have not been assigned to a bus yet"
           description="Your college office assigns students to a bus and a pickup stop. Once that is done, live tracking and arrival estimates appear here."
         />
@@ -115,14 +142,17 @@ export default async function StudentDashboard() {
               value={bus?.busNumber ?? "—"}
               sub={bus?.registrationNo}
               tone="blue"
+              icon="bus"
             />
             <StatTile
               label="Your stop"
               value={assignment.stop.name}
               sub={assignment.stop.address}
+              icon="pin"
             />
             <StatTile
               label="Arriving in"
+              icon="clock"
               value={etaLabel(eta)}
               sub={
                 distanceM !== null ? `${(distanceM / 1000).toFixed(1)} km away` : "no live location"
@@ -131,6 +161,7 @@ export default async function StudentDashboard() {
             />
             <StatTile
               label="Bus status"
+              icon="signal"
               value={
                 isLive ? (
                   <StatusDot online label="On route" />
@@ -147,7 +178,7 @@ export default async function StudentDashboard() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardTitle hint="Where the driver starts the pickup run">
+              <CardTitle icon="routes" hint="Where the driver starts the pickup run">
                 Route
               </CardTitle>
               <div className="flex items-center justify-between gap-3">
@@ -172,7 +203,7 @@ export default async function StudentDashboard() {
             </Card>
 
             <Card>
-              <CardTitle hint="Tells the driver to expect you">
+              <CardTitle icon="clock" hint="Tells the driver to expect you">
                 Waiting status
               </CardTitle>
               {myRecord ? (
@@ -193,6 +224,7 @@ export default async function StudentDashboard() {
           {bus?.route ? (
             <Card>
               <CardTitle
+                icon="pin"
                 hint={`${bus.route.routeStops.length} stops · ${assignment.direction === "PICKUP" ? "morning run" : "evening run"}`}
               >
                 Stops on this route

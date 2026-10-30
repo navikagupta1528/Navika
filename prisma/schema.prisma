@@ -1,4 +1,4 @@
-// Navika — Smart College/School Bus Management & Tracking System
+// BusGuard — Smart College/School Bus Management & Tracking System
 // Prisma 7 conventions: datasource url lives in prisma7.config.ts, not here.
 
 generator client {
@@ -70,6 +70,12 @@ enum NotificationType {
   INFO
 }
 
+enum DrivingEventType {
+  HARSH_BRAKING
+  HARD_ACCELERATION
+  OVERSPEED
+}
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
@@ -101,6 +107,9 @@ model User {
 
   notifications Notification[]
   pushSubscriptions PushSubscription[]
+
+  /// Safety events this driver triggered, for the weekly scorecard.
+  drivingEvents DrivingEvent[] @relation("DriverEvents")
 
   @@index([role])
 }
@@ -176,6 +185,7 @@ model Stop {
   enrollments Enrollment[]
   stopEvents  StopEvent[]
   pickupRecords PickupRecord[]
+  stopApproaches StopApproach[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -248,11 +258,43 @@ model Bus {
   busAssignments BusDriver[]
   enrollments    Enrollment[]
   trips          Trip[]
+  stopApproaches StopApproach[]
+  drivingEvents  DrivingEvent[]
+  devices        BusDevice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+/// A hardware tracker fitted to a bus.
+///
+/// The normal installation for a school is a GPS unit on the vehicle rather than
+/// a phone in a driver's pocket, and that unit has no login. It authenticates
+/// with a bearer token, stored here only as a SHA-256 hash - see
+/// `src/lib/device-token.ts` for why a hash and why not bcrypt.
+///
+/// A separate table rather than a token column on `Bus`, because a bus can carry
+/// more than one unit over its life, a unit gets replaced, and replacing one must
+/// not revoke the other. `revokedAt` keeps the row so the admin screen can still
+/// explain what happened to a token that stopped working, and `lastSeenAt` is how
+/// an admin tells "fitted but silent" from "not fitted at all".
+model BusDevice {
+  id        String @id @default(cuid())
+  busId     String
+  bus       Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+  label     String
+  tokenHash String @unique
+
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([busId])
 }
 
 /// Driver <-> Bus over time. Not a column on Bus, because drivers rotate and we
@@ -334,6 +376,8 @@ model Trip {
   stopEvents   StopEvent[]
   pickupRecords PickupRecord[]
   alerts        EmergencyAlert[]
+  stopApproaches StopApproach[]
+  drivingEvents  DrivingEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -364,7 +408,7 @@ model StopEvent {
 }
 
 /// THE differentiator table: per student, per trip, per stop.
-/// This is what makes Navika "student-aware" rather than just a map with a dot.
+/// This is what makes BusGuard "student-aware" rather than just a map with a dot.
 model PickupRecord {
   id         String        @id @default(cuid())
   tripId     String
@@ -382,12 +426,114 @@ model PickupRecord {
   pickedAt        DateTime?
   cancelledAt     DateTime?
 
+  /// Set when a guardian confirms, after a MISSED pickup, that their child is
+  /// accounted for. The row stays MISSED — the bus really did leave without
+  /// them — so this is an acknowledgement layered on top of the fact rather than
+  /// a correction of it. Kept separate from `status` so a report can still ask
+  /// "how many children were left behind" and, within that, "how many were
+  /// confirmed safe", which are two different questions and only one of them is
+  /// about the fleet.
+  safeMarkedAt   DateTime?
+  safeMarkedById String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([tripId, studentId, stopId])
   @@index([tripId, status])
   @@index([stopId, status])
+}
+
+/// A geofence ring a bus has already entered on a given run, so the "bus is
+/// almost at your stop" alert is sent exactly once per stop per run.
+///
+/// This is a dedup record, not a log. Without it a bus ticking every few seconds
+/// inside the 800 m ring would notify every guardian at that stop four times a
+/// minute for the two minutes it spends approaching — and a parent who gets four
+/// identical push alerts stops reading them, which is worse than never sending.
+///
+/// Durability is the point of the table rather than an in-memory set: a deploy
+/// mid-run must not re-alert a stop the bus already served, and the simulator's
+/// own restart is the same case.
+model StopApproach {
+  id      String @id @default(cuid())
+  busId   String
+  bus     Bus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  stopId  String
+  stop    Stop   @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  /// The trip this happened on, when there was one. Null for a simulated bus,
+  /// which moves without a `Trip` row so a demonstration never writes fake
+  /// attendance history into real reports — the same reason the simulator emits
+  /// stop arrivals over the socket instead of into `StopEvent`.
+  tripId String?
+  trip   Trip?  @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  /// "PICKUP" or "DROPOFF". The morning run and the afternoon run share every
+  /// stop and a parent needs both, so this is part of what makes a row unique
+  /// rather than decoration.
+  direction Direction
+
+  /// "APPROACHING" (~800 m) or "ARRIVING" (~150 m), from `src/lib/geofence.ts`.
+  ring String
+
+  /// The threshold that fired, kept so a future report can tell an "almost there"
+  /// from an "at the kerb" without re-deriving the ring from the name.
+  radiusMeters Int
+
+  /// The calendar day of the run, so tomorrow's bus may notify again. A date,
+  /// not a timestamp: two runs on a day are separated by `direction`, and
+  /// nothing here needs sub-day precision.
+  date DateTime @db.Date
+
+  notifiedAt DateTime @default(now())
+
+  @@unique([busId, stopId, direction, ring, date])
+  @@index([date])
+}
+
+/// A moment the driver drove unsafely, detected from the GPS stream by
+/// `src/lib/driving.ts` and written by the driving watcher.
+///
+/// WHY PERSISTED AND NOT JUST COUNTED
+///
+/// The score is only useful if it can be explained. A manager who is told "this
+/// driver scored 45" will ask "what did they do?", and the answer has to be a
+/// list of moments — a harsh brake here, an overspeed there — not a number that
+/// appeared from nowhere. The events are the audit trail behind the score.
+///
+/// WHY THE PREVIOUS FIX IS NOT STORED HERE
+///
+/// Classification needs the fix *before* the current one, but that is a
+/// per-bus rolling value the watcher keeps in memory: it is the minimum the
+/// decision needs, it is meaningless a moment later, and storing it would be a
+/// second, redundant copy of `Bus`'s own last-known position.
+model DrivingEvent {
+  id           String           @id @default(cuid())
+  busId        String
+  bus          Bus              @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+  /// Null for a simulated bus, which moves without a driver to score.
+  driverId     String?
+  driver       User?            @relation("DriverEvents", fields: [driverId], references: [id], onDelete: SetNull)
+
+  tripId       String?
+  trip         Trip?            @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  type         DrivingEventType
+
+  /// The speed change that triggered it, or the speed itself for overspeed.
+  magnitudeKph Float
+
+  lat          Float?
+  lng          Float?
+
+  at           DateTime
+
+  createdAt    DateTime         @default(now())
+
+  @@index([driverId, at])
+  @@index([busId, at])
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +589,7 @@ model Notification {
 /// A browser's push subscription, so a notification reaches a phone with the
 /// app closed.
 ///
-/// One row per browser, not per user: the same person opening Navika on a
+/// One row per browser, not per user: the same person opening BusGuard on a
 /// tablet and a phone has two endpoints, and unregistering one must not
 /// silence the other. Rows are pruned automatically when the push service
 /// reports an endpoint as gone (see `src/lib/push.ts`), because an expired

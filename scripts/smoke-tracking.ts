@@ -25,8 +25,16 @@
  * Snapshots and restores every row it touches, so it is safe to re-run.
  */
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client";
+
+/*
+ * The app's own client, so this sees exactly what the running server sees —
+ * and so this process holds ONE pool rather than two. `getTrackingView` and
+ * `src/lib/attendance` reach `src/lib/db` underneath; adding a private client
+ * on top meant two pools that could together exhaust the cluster's connection
+ * limit. See `smoke-boarding.ts` for the full account. Same fix as
+ * `smoke-reconcile`.
+ */
+import { prisma } from "../src/lib/db";
 import { Role, PickupStatus, AlertType } from "../src/generated/prisma/enums";
 import {
   setPickupStatus,
@@ -41,12 +49,6 @@ import { login, resolveBase, visibleText, DEMO_PASSWORD } from "./lib/http";
 
 const BASE = resolveBase();
 const PASSWORD = DEMO_PASSWORD;
-
-// Same adapter as the app, pointed at the same cluster, so this sees exactly
-// what the running server sees.
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
 
 let pass = 0;
 let fail = 0;
@@ -134,12 +136,12 @@ async function cleanup(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log(`Navika tracking smoke — ${BASE}`);
+  console.log(`BusGuard tracking smoke — ${BASE}`);
 
   // ---------------------------------------------------------------- fixtures
-  const parent1 = await prisma.user.findUniqueOrThrow({ where: { email: "parent1@navika.test" } });
+  const parent1 = await prisma.user.findUniqueOrThrow({ where: { email: "parent1@busguard.test" } });
   const student0 = await prisma.user.findUniqueOrThrow({
-    where: { email: "aarav.sharma0@student.navika.test" } },
+    where: { email: "aarav.sharma0@student.busguard.test" } },
   );
 
   const trips = await prisma.trip.findMany({
@@ -234,9 +236,9 @@ async function main(): Promise<void> {
   // =================================================================== pages
   section("pages render for the right role");
 
-  const admin = await login(BASE, "admin@navika.test", PASSWORD);
+  const admin = await login(BASE, "admin@busguard.test", PASSWORD);
   const driver = await login(BASE, driverA.email, PASSWORD);
-  const parent = await login(BASE, "parent1@navika.test", PASSWORD);
+  const parent = await login(BASE, "parent1@busguard.test", PASSWORD);
   const student = await login(BASE, student0.email, PASSWORD);
 
   for (const [name, session, path] of [
@@ -879,7 +881,7 @@ async function main(): Promise<void> {
   // The response is polled by anything monitoring, and often lands in a public
   // deploy log. It must never carry anything credential-shaped.
   report(
-    !/postgres|navika:|password|scheme=/i.test(healthText),
+    !/postgres|busguard:|password|scheme=/i.test(healthText),
     "the health response carries no connection string",
     healthText.slice(0, 120),
   );

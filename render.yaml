@@ -1,4 +1,4 @@
-# Render blueprint for Navika.
+# Render blueprint for BusGuard.
 #
 #   1. Push this repo to GitHub.
 #   2. In Render: New -> Blueprint -> point at the repo.
@@ -10,8 +10,8 @@
 # every few seconds, and the EtaCache absorbs the OSRM calls.
 
 databases:
-  - name: navika-db
-    databaseName: navika
+  - name: busguard-db
+    databaseName: busguard
     # "free" is a real plan id, not a placeholder. It expires after 30 days,
     # which is fine for a trial and fatal for production - switch to "basic-256mb"
     # (256 MB, ~$7/mo) before anyone relies on this.
@@ -20,7 +20,7 @@ databases:
 
 services:
   - type: web
-    name: navika
+    name: busguard
     # Render's native Node builder, NOT `next start`. The default start command
     # runs `next start`, which has no Socket.IO server attached, so live tracking
     # would silently never connect while every page still rendered perfectly -
@@ -36,9 +36,23 @@ services:
 
     # Single instance, deliberately. Socket.IO broadcasts from whichever process
     # holds a driver's connection; with two instances a parent could be connected
-    # to the one that never saw the ping. Scaling out means a Redis adapter
-    # first, which is a deliberate piece of work rather than a config line.
+    # to the one that never saw the ping.
+    #
+    # Scaling out is now possible, but not by changing this line alone: it needs a
+    # Redis service plus REDIS_URL below, which swaps Socket.IO onto a shared
+    # adapter (see src/lib/realtime-scaling.ts). `/api/health` reports which mode
+    # an instance is in, so a load-balanced deployment that forgot this is visible
+    # as "single-instance" rather than as a mystery. Unset REDIS_URL is a supported
+    # configuration and does exactly what this service does today.
     numInstances: 1
+
+    # Scaling out: create a Redis instance in Render, then uncomment. Validated on
+    # boot; a bad value degrades to single-instance rather than refusing to start.
+    #   - key: REDIS_URL
+    #     fromService:
+    #       name: busguard-redis
+    #       type: redis
+    #       property: connectionString
 
     # Migrations run once, before this container takes traffic. NOT a startup
     # command: two containers booting together would race each other, and a
@@ -55,7 +69,7 @@ services:
       # ---- wired automatically by Render -------------------------------
       - key: DATABASE_URL
         fromDatabase:
-          name: navika-db
+          name: busguard-db
           property: connectionString
 
       # ---- you supply these --------------------------------------------
@@ -67,7 +81,7 @@ services:
       # keeps running the old bundle. This is the single most common reason a
       # deployed map renders blank or a push subscription silently fails.
       - key: NEXT_PUBLIC_APP_URL
-        sync: false # e.g. https://navika.onrender.com - no trailing slash
+        sync: false # e.g. https://busguard.onrender.com - no trailing slash
 
       - key: NEXT_PUBLIC_MAP_TILE_URL
         sync: false # see .env.example; OSM's public tiles are dev-only

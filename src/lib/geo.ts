@@ -41,6 +41,9 @@ export function lerpLatLng(a: LatLng, b: LatLng, t: number): LatLng {
   return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
 }
 
+/** Road distance runs ~30% over straight-line in a gridded city. */
+const ROAD_INFLATION = 1.3;
+
 /**
  * Fallback ETA when OSRM is unavailable or rate limited.
  *
@@ -48,16 +51,37 @@ export function lerpLatLng(a: LatLng, b: LatLng, t: number): LatLng {
  * gridded city, so we inflate it and divide by an assumed average speed that
  * accounts for stops, junctions and traffic lights. Deliberately conservative:
  * a bus ETA that is too optimistic is worse than one that is too pessimistic.
+ *
+ * Returns whole minutes. `estimateEtaSeconds` is the same estimate at sub-minute
+ * resolution, for countdowns that need to tick rather than jump.
  */
 export function estimateEtaMinutes(
   from: LatLng,
   to: LatLng,
   averageSpeedKph = 22,
 ): number {
+  return Math.max(1, Math.round(estimateEtaSeconds(from, to, averageSpeedKph) / 60));
+}
+
+/**
+ * The same estimate as `estimateEtaMinutes`, in seconds.
+ *
+ * Added for the arrival countdown, which ticks down every second between bus
+ * pings. Rounding to whole minutes first — then counting down — would produce a
+ * number that leaps a minute at a time and disagrees with the socket by up to
+ * sixty seconds. The floor is 30 s rather than 1 min so that "arriving" and "1
+ * min" are distinguishable: a bus 40 s away is not the same message as one that
+ * is already at the kerb.
+ */
+export function estimateEtaSeconds(
+  from: LatLng,
+  to: LatLng,
+  averageSpeedKph = 22,
+): number {
   const straight = haversineMeters(from, to);
-  const roadLike = straight * 1.3;
-  const metersPerMinute = (averageSpeedKph * 1000) / 60;
-  return Math.max(1, Math.round(roadLike / metersPerMinute));
+  const roadLike = straight * ROAD_INFLATION;
+  const metersPerSecond = (averageSpeedKph * 1000) / 3600;
+  return Math.max(30, Math.round(roadLike / metersPerSecond));
 }
 
 /** Bounding box that contains every point, for fitting the map viewport. */

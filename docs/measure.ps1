@@ -1,8 +1,8 @@
 # Measure whether the one-pager fits a single A4 page, and how each column
 # balances. Renders the HTML in headless Chrome and reports back overflow in
 # pixels plus the used height of each macro column.
-$src = "C:\Users\Parth Gupta\Desktop\Navika\docs\navika-onepager.html"
-$m = "C:\Users\Parth Gupta\Desktop\Navika\docs\_measure.html"
+$src = "C:\Users\Parth Gupta\Desktop\BusGuard\docs\busguard-onepager.html"
+$m = "C:\Users\Parth Gupta\Desktop\BusGuard\docs\_measure.html"
 
 $inject = @'
 <div id="MRES">PENDING</div><script>

@@ -42,17 +42,33 @@ const geistSans = Geist({
  */
 
 export const metadata: Metadata = {
+  /*
+   * Social preview images and absolute links are resolved against this. Without
+   * it Next falls back to `http://localhost:3010`, and a shared link would carry
+   * a card pointing at a developer's laptop. The value comes from the same env
+   * var the rest of the app uses for absolute URLs, so a deployed origin is set
+   * once, not in two places.
+   */
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3010",
+  ),
   title: {
-    default: "Navika — Smart Bus Tracking",
-    template: "%s · Navika",
+    default: "BusGuard — Smart Bus Tracking",
+    template: "%s · BusGuard",
   },
   description:
-    "Student-aware college and school bus management: live location, ETA, waiting counts and pickup tracking for students, parents, drivers and admins.",
-  applicationName: "Navika",
+    "Student-aware bus tracking for schools and colleges: live location, arrival countdown, and pickup records, with alerts when the bus is close and when it has left without a student.",
+  applicationName: "BusGuard",
   manifest: "/manifest.webmanifest",
+  twitter: {
+    card: "summary_large_image",
+    title: "BusGuard — student-aware bus tracking",
+    description:
+      "Follow your child's bus live, get arrival alerts, and keep a record of who travelled.",
+  },
   appleWebApp: {
     capable: true,
-    title: "Navika",
+    title: "BusGuard",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },

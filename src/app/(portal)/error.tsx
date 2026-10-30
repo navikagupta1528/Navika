@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { IconBadge } from "@/components/ui/primitives";
+
 /**
  * The boundary for a failed page render inside the portal.
  *
@@ -47,7 +49,18 @@ export default function PortalError({
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200">
+      {/*
+        `busguard-pop` rather than `busguard-rise`. This card does not exist in the
+        page's initial paint - it appears only after a render has already
+        failed, which makes it chrome in the sense globals.css uses the word.
+        `busguard-pop` fades and settles, which reads as "this just arrived";
+        `busguard-rise` is reserved for content that was always going to be there.
+      */}
+      <div className="busguard-pop w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <div className="mb-4 flex justify-center">
+          {/* Decorative: the heading below says the same thing in words. */}
+          <IconBadge name="alert" tone="red" size="lg" />
+        </div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           Something went wrong
         </p>

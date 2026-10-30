@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/dal";
-import { getBus, getBusLoads, listRoutes, listDrivers } from "@/lib/admin/queries";
+import { getBus, getBusLoads, listBusDevices, listRoutes, listDrivers } from "@/lib/admin/queries";
 import { Role } from "@/generated/prisma/enums";
 import { PageHeader } from "@/components/portal/portal-shell";
 import { Card, CardTitle, Badge, EmptyState } from "@/components/ui/primitives";
@@ -9,6 +9,7 @@ import { DetailList } from "@/components/admin/data-table";
 import { EntityForm, QuickForm } from "@/components/admin/entity-form";
 import { ActionForm } from "@/components/admin/action-form";
 import { SimulationToggle } from "@/components/admin/simulation-toggle";
+import { DeviceTokenPanel } from "@/components/admin/device-token-panel";
 import { isSimulating, simulationProgress } from "@/server/simulator-runner";
 import { busDefaults, busStatusOptions } from "@/lib/admin/form-defs";
 import { saveBus, assignBusDriver, unassignBusDriver, setBusStatus, deleteBus } from "@/app/actions/admin/buses";
@@ -34,6 +35,8 @@ export default async function BusDetailPage({
     listDrivers(),
   ]);
   if (!bus) notFound();
+
+  const devices = await listBusDevices(bus.id);
 
   const load = loads.find((l) => l.id === bus.id);
   const active = bus.busAssignments.filter((a) => a.validTo == null);
@@ -65,6 +68,7 @@ export default async function BusDetailPage({
       <PageHeader
         title={`Bus ${bus.busNumber}`}
         description={`${bus.registrationNo}${bus.model ? ` · ${bus.model}` : ""}`}
+        icon="fleet"
         action={
           <Link href="/admin/buses" className="btn-secondary">
             Back to fleet
@@ -75,7 +79,7 @@ export default async function BusDetailPage({
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           <Card>
-            <CardTitle>Bus details</CardTitle>
+            <CardTitle icon="fleet">Bus details</CardTitle>
             <EntityForm
               fields={fields}
               action={saveBus}
@@ -151,12 +155,16 @@ export default async function BusDetailPage({
           </Card>
 
           <Card>
-            <CardTitle hint="Who is allowed to drive this bus right now.">
+            <CardTitle
+              icon="drivers"
+              hint="Who is allowed to drive this bus right now."
+            >
               Drivers on this bus
             </CardTitle>
 
             {active.length === 0 ? (
               <EmptyState
+                icon="drivers"
                 title="No driver assigned"
                 description="Assign a driver below. Trips need a driver, so nothing can be scheduled until then."
               />
@@ -232,11 +240,31 @@ export default async function BusDetailPage({
               </details>
             ) : null}
           </Card>
+
+          {/*
+            The fitted-tracker path, beside the driver one on purpose: they are two
+            ways to answer the same question, and an admin choosing between them
+            should see both in the same place rather than discovering the second on
+            another screen.
+          */}
+          <Card>
+            <CardTitle
+              icon="satellite"
+              hint="A GPS unit on the bus that reports without anyone's phone."
+            >
+              Fitted trackers
+            </CardTitle>
+            <DeviceTokenPanel busId={bus.id} devices={devices} />
+            <p className="mt-3 text-xs text-slate-500">
+              A tracker authenticates with its own token, so it keeps reporting when no driver
+              is signed in. It reports to the same live map as a driver&apos;s phone.
+            </p>
+          </Card>
         </div>
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle icon="overview">Summary</CardTitle>
             <DetailList
               items={[
                 {
@@ -301,8 +329,10 @@ export default async function BusDetailPage({
             </Link>
           </Card>
 
-          <Card>
-            <CardTitle>Danger zone</CardTitle>
+          <Card accent="red">
+            <CardTitle icon="alert" tone="red">
+              Danger zone
+            </CardTitle>
             {busDeletable ? (
               <>
                 <p className="mb-3 text-xs text-slate-500">

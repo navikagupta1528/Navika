@@ -1,7 +1,7 @@
 {
-  "name": "Navika — Smart Bus Tracking",
-  "short_name": "Navika",
-  "description": "Live bus location, ETA and pickup tracking for college and school transport.",
+  "name": "BusGuard — Smart Bus Tracking",
+  "short_name": "BusGuard",
+  "description": "Know where the bus is, and that your child is on it. Live bus tracking, arrival alerts and pickup records for schools and colleges.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
@@ -9,15 +9,21 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],

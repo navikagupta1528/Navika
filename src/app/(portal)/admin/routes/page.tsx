@@ -23,6 +23,7 @@ export default async function RoutesPage() {
       <PageHeader
         title="Routes"
         description="Each route is an ordered list of stops, shared by the buses assigned to it."
+        icon="routes"
         action={
           <Link href="/admin/routes/new" className="btn-primary">
             New route
@@ -31,7 +32,10 @@ export default async function RoutesPage() {
       />
 
       <Card>
-        <CardTitle hint={`${routes.length} route${routes.length === 1 ? "" : "s"}`}>
+        <CardTitle
+          icon="routes"
+          hint={`${routes.length} route${routes.length === 1 ? "" : "s"}`}
+        >
           All routes
         </CardTitle>
 

@@ -105,10 +105,22 @@ export function NotificationList({
                   {item.title}
                 </p>
                 {!isRead ? (
-                  <span
-                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500"
-                    aria-label="unread"
-                  />
+                  <>
+                    {/*
+                     * The dot is the visual cue; the text is the accessible one.
+                     * `aria-label` on a bare `<span>` is prohibited — a span has
+                     * an implicit `generic` role, which does not permit naming —
+                     * so the previous `aria-label="unread"` was dropped by every
+                     * screen reader and flagged by the audit. A visually hidden
+                     * label beside an `aria-hidden` dot carries the same meaning
+                     * without an invalid attribute.
+                     */}
+                    <span className="sr-only">Unread</span>
+                    <span
+                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500"
+                      aria-hidden
+                    />
+                  </>
                 ) : null}
               </div>
               <p className="mt-0.5 text-sm text-slate-600">{item.body}</p>

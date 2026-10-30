@@ -31,6 +31,7 @@ export default async function DriverDetailPage({
       <PageHeader
         title={driver.name}
         description={driver.email}
+        icon="drivers"
         action={
           <Link href="/admin/drivers" className="btn-secondary">
             Back to drivers
@@ -41,7 +42,10 @@ export default async function DriverDetailPage({
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           <Card>
-            <CardTitle hint="Leave the password blank to keep the current one.">
+            <CardTitle
+              icon="drivers"
+              hint="Leave the password blank to keep the current one."
+            >
               Driver details
             </CardTitle>
             <EntityForm
@@ -66,6 +70,7 @@ export default async function DriverDetailPage({
             <CardTitle hint="Assign buses from the Fleet screen.">Bus assignments</CardTitle>
             {active.length === 0 && past.length === 0 ? (
               <EmptyState
+                icon="fleet"
                 title="No bus assignments"
                 description="Open the bus and assign this driver, so trips can be scheduled for them."
               />
@@ -100,7 +105,7 @@ export default async function DriverDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle icon="overview">Summary</CardTitle>
             <DetailList
               items={[
                 {
@@ -141,7 +146,7 @@ export default async function DriverDetailPage({
           </Card>
 
           <Card>
-            <CardTitle>Access</CardTitle>
+            <CardTitle icon="shield">Access</CardTitle>
             <p className="mb-3 text-xs text-slate-500">
               An inactive driver cannot sign in, and cannot be assigned to a new trip.
               Deactivating is refused while a bus assignment is open.
@@ -154,8 +159,10 @@ export default async function DriverDetailPage({
             />
           </Card>
 
-          <Card>
-            <CardTitle>Danger zone</CardTitle>
+          <Card accent="red">
+            <CardTitle icon="alert" tone="red">
+              Danger zone
+            </CardTitle>
             {driver._count.drivenTrips === 0 ? (
               <>
                 <p className="mb-3 text-xs text-slate-500">

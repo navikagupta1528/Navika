@@ -140,7 +140,7 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   /* Small rise, no fade. Enough to read as "arrived", short enough not
    * to feel like waiting. */
-  @keyframes navika-rise {
+  @keyframes busguard-rise {
     from {
       transform: translate3d(0, 10px, 0);
     }
@@ -150,7 +150,7 @@ body {
   }
 
   /* The horizontal nudge used for the active nav rail. */
-  @keyframes navika-rail {
+  @keyframes busguard-rail {
     from {
       transform: scaleY(0.2);
     }
@@ -160,7 +160,7 @@ body {
   }
 
   /* Slow drift for the ambient background on the sign-in screen. */
-  @keyframes navika-drift-a {
+  @keyframes busguard-drift-a {
     from {
       transform: translate3d(0, 0, 0) scale(1);
     }
@@ -169,7 +169,7 @@ body {
     }
   }
 
-  @keyframes navika-drift-b {
+  @keyframes busguard-drift-b {
     from {
       transform: translate3d(0, 0, 0) scale(1.1);
     }
@@ -180,7 +180,7 @@ body {
 
   /* The skeleton sweep. Translates a highlight across a fixed box rather
    * than moving the box's background-position, which would repaint. */
-  @keyframes navika-sweep {
+  @keyframes busguard-sweep {
     from {
       transform: translate3d(-100%, 0, 0);
     }
@@ -191,35 +191,35 @@ body {
 
   /* --- entrances -------------------------------------------------- */
 
-  .navika-rise {
-    animation: navika-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  .busguard-rise {
+    animation: busguard-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  /* Staggered lists. The consumer sets `--navika-i` to the item index and
+  /* Staggered lists. The consumer sets `--busguard-i` to the item index and
    * `min()` caps it, so a 40-row table does not spend two seconds
    * staggering. Capping in CSS rather than in JS means the caller cannot
    * forget to. */
-  .navika-stagger > * {
-    animation: navika-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    animation-delay: calc(min(var(--navika-i, 0), 10) * 45ms);
+  .busguard-stagger > * {
+    animation: busguard-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(min(var(--busguard-i, 0), 10) * 45ms);
   }
 
   /* --- ambient ---------------------------------------------------- */
 
-  .navika-ambient-a {
-    animation: navika-drift-a 22s ease-in-out infinite alternate;
+  .busguard-ambient-a {
+    animation: busguard-drift-a 22s ease-in-out infinite alternate;
   }
 
-  .navika-ambient-b {
-    animation: navika-drift-b 28s ease-in-out infinite alternate;
+  .busguard-ambient-b {
+    animation: busguard-drift-b 28s ease-in-out infinite alternate;
   }
 
   /* --- interaction feedback ---------------------------------------- */
 
   /*
    * Buttons get the press feedback by selector rather than by a shared
-   * `.navika-press` class. Tailwind v4 cannot `@apply` a class defined in this
-   * file, only real utilities, so `.btn { @apply navika-press }` is a build
+   * `.busguard-press` class. Tailwind v4 cannot `@apply` a class defined in this
+   * file, only real utilities, so `.btn { @apply busguard-press }` is a build
    * error - see the note at the top of this file. It also would not have been
    * the better design: adding the class at every call site means one forgotten
    * button, and nothing in review catches that.
@@ -260,13 +260,13 @@ body {
 
   /* Cards lift. The shadow is transitioned, not animated, so it costs one
    * repaint on hover and then nothing - hover is not a loop. */
-  .navika-lift {
+  .busguard-lift {
     transition:
       transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
       box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .navika-lift:hover {
+  .busguard-lift:hover {
     transform: translate3d(0, -2px, 0);
     box-shadow:
       0 4px 6px -1px rgb(15 23 42 / 0.07),
@@ -275,7 +275,7 @@ body {
 
   /* The active-item rail in the sidebar. `scaleY` from the centre, so the
    * mark grows out of its own middle rather than sliding in from an edge. */
-  .navika-rail::before {
+  .busguard-rail::before {
     content: "";
     position: absolute;
     inset-block: 0.4rem;
@@ -284,12 +284,12 @@ body {
     border-radius: 9999px;
     background: var(--color-brand-600);
     transform-origin: center;
-    animation: navika-rail 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: busguard-rail 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   /* Loading skeleton. The grey base is always painted; only the highlight
    * moves, so the sweep never triggers layout. */
-  .navika-sweep::after {
+  .busguard-sweep::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -299,7 +299,7 @@ body {
       rgb(255 255 255 / 0.7),
       transparent
     );
-    animation: navika-sweep 1.4s ease-in-out infinite;
+    animation: busguard-sweep 1.4s ease-in-out infinite;
   }
 
   /*
@@ -318,14 +318,14 @@ body {
    * Background and inset shadow only. Nothing here triggers layout, and hover is
    * not a loop, so the repaint settles immediately on pointer entry.
    */
-  .navika-row {
+  .busguard-row {
     transition:
       background-color 140ms ease,
       box-shadow 140ms ease;
   }
 
-  .navika-row:hover,
-  .navika-row:focus-within {
+  .busguard-row:hover,
+  .busguard-row:focus-within {
     background-color: var(--color-slate-50);
     box-shadow: inset 3px 0 0 var(--color-brand-500);
   }
@@ -335,13 +335,13 @@ body {
    * that are merely under the pointer, which currently look exactly as dead as
    * everything else.
    */
-  .navika-navlink {
+  .busguard-navlink {
     transition:
       background-color 140ms ease,
       transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .navika-navlink:hover {
+  .busguard-navlink:hover {
     transform: translate3d(2px, 0, 0);
   }
 
@@ -358,12 +358,12 @@ body {
    *   page that loads and counts up from zero is a page lying about its own
    *   numbers for half a second, and it shifts layout if any digit is wider.
    */
-  .navika-count-up {
+  .busguard-count-up {
     display: inline-block;
     will-change: transform;
   }
 
-  @keyframes navika-count-up-in {
+  @keyframes busguard-count-up-in {
     from {
       transform: translate3d(0, 0.55em, 0);
       opacity: 0;
@@ -374,8 +374,147 @@ body {
     }
   }
 
-  .navika-count-up[data-changed="true"] {
-    animation: navika-count-up-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  .busguard-count-up[data-changed="true"] {
+    animation: busguard-count-up-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* --- chrome: overlays, popovers, one-shot entrances -------------- */
+
+  /*
+   * Fades and pops are for things that appear *after* the page has painted: a
+   * menu, a dropdown, a confirmation. They are deliberately never used on main
+   * content, because animating opacity from 0 delays the element's first paint
+   * and Largest Contentful Paint records that delay. `busguard-rise` above is the
+   * entrance for content; this group is for chrome.
+   */
+  @keyframes busguard-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes busguard-pop {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -6px, 0) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  /* A slow bob for decorative hero art. Transform-only, so it never reflows. */
+  @keyframes busguard-float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -9px, 0);
+    }
+  }
+
+  /* A bar that fills. `scaleX` rather than `width`, because a width animation
+   * would reflow every sibling to its right on every frame - and a progress bar
+   * is the one element guaranteed to have siblings beside it. */
+  @keyframes busguard-grow-x {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .busguard-fade {
+    animation: busguard-fade 200ms ease both;
+  }
+
+  .busguard-pop {
+    animation: busguard-pop 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .busguard-float {
+    animation: busguard-float 7s ease-in-out infinite;
+  }
+
+  .busguard-float-slow {
+    animation: busguard-float 10s ease-in-out infinite;
+  }
+
+  .busguard-grow-x {
+    transform-origin: left center;
+    animation: busguard-grow-x 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /*
+   * A link underline that grows out from the left.
+   *
+   * The alternative - `text-decoration` appearing on hover - is a colour change
+   * with no direction, and on a row of links the eye cannot tell which one the
+   * pointer is on. A `scaleX` pseudo-element gives the underline an origin, so
+   * the movement itself answers "here".
+   */
+  .busguard-underline {
+    position: relative;
+  }
+
+  .busguard-underline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.15rem;
+    height: 1.5px;
+    border-radius: 9999px;
+    background: currentcolor;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .busguard-underline:hover::after,
+  .busguard-underline:focus-visible::after {
+    transform: scaleX(1);
+  }
+
+  /*
+   * Whole-card affordances for the shortcuts and marketing tiles.
+   *
+   * `busguard-linkcard` is for an `<a>`-as-card: it lifts on hover *and* on
+   * `focus-visible`, so a keyboard user tabbing the grid gets the same "this
+   * one" signal a pointer does. The `.busguard-tile` child pops at the same time,
+   * which is the only place a hover rotates anything - a 3deg tilt on a small
+   * square reads as playful; on a full card it would read as broken layout.
+   */
+  .busguard-linkcard {
+    transition:
+      transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 180ms ease;
+  }
+
+  .busguard-linkcard:hover,
+  .busguard-linkcard:focus-visible {
+    transform: translate3d(0, -2px, 0);
+    box-shadow:
+      0 4px 6px -1px rgb(15 23 42 / 0.07),
+      0 12px 24px -8px rgb(15 23 42 / 0.12);
+  }
+
+  .busguard-lift .busguard-tile,
+  .busguard-linkcard .busguard-tile {
+    transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .busguard-lift:hover .busguard-tile,
+  .busguard-linkcard:hover .busguard-tile,
+  .busguard-linkcard:focus-visible .busguard-tile {
+    transform: scale(1.09) rotate(-3deg);
   }
 }
 
@@ -383,7 +522,7 @@ body {
 /* Ambient background (auth screens)                                    */
 /* ------------------------------------------------------------------ */
 
-.navika-ambient {
+.busguard-ambient {
   position: absolute;
   border-radius: 9999px;
   filter: blur(70px);
@@ -392,7 +531,7 @@ body {
    * on the parent keeps the drift from creating a scrollbar. */
 }
 
-.navika-ambient--a {
+.busguard-ambient--a {
   top: -14%;
   left: -8%;
   width: 26rem;
@@ -400,7 +539,7 @@ body {
   background: oklch(0.82 0.13 162 / 0.5);
 }
 
-.navika-ambient--b {
+.busguard-ambient--b {
   right: -10%;
   bottom: -18%;
   width: 30rem;
@@ -409,10 +548,39 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Decorative surfaces                                                  */
+/*                                                                     */
+/* Faint, static patterns for hero sections. These carry no motion, so  */
+/* they sit outside the `prefers-reduced-motion` gate above - there is  */
+/* nothing here to reduce. Both are eye-wateringly low contrast on      */
+/* purpose: they are texture, and the moment a reader notices one it has */
+/* become a distraction.                                                */
+/* ------------------------------------------------------------------ */
+
+.busguard-dots {
+  background-image: radial-gradient(rgb(15 23 42 / 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.busguard-grid {
+  background-image:
+    linear-gradient(to right, rgb(15 23 42 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 23 42 / 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* Fades a pattern out towards the bottom rather than ending it on a hard
+ * edge, which is what stops a tiled background from reading as a crop. */
+.busguard-mask-b {
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
 /* Skeleton                                                            */
 /* ------------------------------------------------------------------ */
 
-.navika-skeleton {
+.busguard-skeleton {
   position: relative;
   overflow: hidden;
   background: var(--color-slate-200);
@@ -438,7 +606,7 @@ body {
 /* for Tailwind to scan. Keep the class names in sync with that file.  */
 /* ------------------------------------------------------------------ */
 
-.navika-marker {
+.busguard-marker {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -462,8 +630,8 @@ body {
  * MapLibre positions a marker by writing `transform: translate(-50%,-50%)
  * translate(x,y)` onto the element as an inline style, so it owns `transform`
  * completely. An inline style beats any rule in this file, which means the
- * `.navika-marker:hover { transform: scale(1.12) }` and
- * `.navika-marker--dragging { transform: scale(1.25) }` this replaced could never
+ * `.busguard-marker:hover { transform: scale(1.12) }` and
+ * `.busguard-marker--dragging { transform: scale(1.25) }` this replaced could never
  * take effect: both were dead the moment MapLibre rendered a marker. Written as
  * `scale` instead, the property is applied *before* `transform` in the
  * individual-transform-property order, so the two compose and the marker scales
@@ -473,27 +641,27 @@ body {
  * `transform`, so the "transform and opacity only" rule is not being bent here -
  * this is the same animation under a different property name.
  */
-.navika-marker {
+.busguard-marker {
   transition:
     scale 120ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 120ms ease;
 }
 
-.navika-marker:hover:not(:disabled) {
+.busguard-marker:hover:not(:disabled) {
   scale: 1.12;
 }
 
-.navika-marker:focus-visible {
+.busguard-marker:focus-visible {
   outline: 3px solid #1d4ed8;
   outline-offset: 2px;
 }
 
-.navika-marker:disabled {
+.busguard-marker:disabled {
   cursor: default;
 }
 
 /* Stops: a numbered circle, sized by the route order. */
-.navika-marker--stop {
+.busguard-marker--stop {
   width: 1.75rem;
   height: 1.75rem;
   background: #1d4ed8;
@@ -503,13 +671,13 @@ body {
 
 /* Deactivated stops stay on the map — a trip that ran last month still
    refers to them — but must not read as something to act on. */
-.navika-marker--muted {
+.busguard-marker--muted {
   background: #94a3b8;
   opacity: 0.75;
 }
 
 /* Vehicles: a pill, because a bus number is not a single digit. */
-.navika-marker--vehicle {
+.busguard-marker--vehicle {
   min-width: 1.75rem;
   height: 1.75rem;
   padding-inline: 0.5rem;
@@ -520,7 +688,7 @@ body {
 
 /* A bus that has not reported recently. Desaturated rather than hidden:
    "we lost it" and "it is not running" are different facts. */
-.navika-marker--stale {
+.busguard-marker--stale {
   background: #b45309;
 }
 
@@ -545,7 +713,7 @@ body {
  * stopped reporting must stop moving: "we lost it" and "it is not running" are
  * different facts and should not look alike.
  */
-.navika-marker--vehicle::after {
+.busguard-marker--vehicle::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -556,7 +724,7 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes navika-breathe {
+  @keyframes busguard-breathe {
     0% {
       transform: scale(1);
       opacity: 0.45;
@@ -568,12 +736,12 @@ body {
     }
   }
 
-  .navika-marker--vehicle:not(.navika-marker--stale)::after {
-    animation: navika-breathe 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  .busguard-marker--vehicle:not(.busguard-marker--stale)::after {
+    animation: busguard-breathe 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
 }
 
-.navika-marker--dragging {
+.busguard-marker--dragging {
   scale: 1.25;
   box-shadow:
     0 2px 4px rgb(15 23 42 / 0.3),
@@ -583,7 +751,7 @@ body {
 
 /* Stops do not breathe. A route is static, and a pulsing stop would say
    "this one is live", which is the one thing a stop never is. */
-.navika-marker--stop::after {
+.busguard-marker--stop::after {
   content: none;
 }
 
@@ -591,7 +759,7 @@ body {
    injected into the page, so this cannot be a Tailwind class in a component —
    it has to live in a global stylesheet, scoped tightly enough that it cannot
    restyle an unrelated popup. */
-.navika-popup-link {
+.busguard-popup-link {
   display: inline-block;
   margin-top: 0.25rem;
   font-size: 0.75rem;
@@ -615,25 +783,33 @@ body {
    * Belt and braces. Everything above is already gated on
    * `prefers-reduced-motion: no-preference`, so none of it applies here and
    * these lines would be dead. They are kept anyway, because the gate and this
-   * block are edited independently: a future `navika-*` animation written
+   * block are edited independently: a future `busguard-*` animation written
    * outside the gate is then still killed, instead of quietly ignoring the
    * setting for the one visitor who asked.
    */
-  .navika-rise,
-  .navika-stagger > *,
-  .navika-ambient-a,
-  .navika-ambient-b,
-  .navika-sweep::after,
-  .navika-rail::before,
-  .navika-marker--vehicle::after,
-  .navika-count-up {
+  .busguard-rise,
+  .busguard-stagger > *,
+  .busguard-ambient-a,
+  .busguard-ambient-b,
+  .busguard-sweep::after,
+  .busguard-rail::before,
+  .busguard-marker--vehicle::after,
+  .busguard-count-up,
+  .busguard-fade,
+  .busguard-pop,
+  .busguard-float,
+  .busguard-float-slow,
+  .busguard-grow-x {
     animation: none !important;
   }
 
-  .navika-lift,
-  .navika-marker,
-  .navika-row,
-  .navika-navlink {
+  .busguard-lift,
+  .busguard-marker,
+  .busguard-row,
+  .busguard-navlink,
+  .busguard-underline::after,
+  .busguard-linkcard,
+  .busguard-tile {
     transition: none !important;
   }
 

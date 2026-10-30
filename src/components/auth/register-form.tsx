@@ -5,12 +5,20 @@ import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { register, type AuthState } from "@/app/actions/auth";
 import { FieldError, FieldHint, describedBy } from "./field-error";
+import { Spinner } from "@/components/ui/primitives";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
-      {pending ? "Creating account…" : "Create account"}
+      {pending ? (
+        <>
+          <Spinner />
+          Creating account…
+        </>
+      ) : (
+        "Create account"
+      )}
     </button>
   );
 }
@@ -118,7 +126,7 @@ export function RegisterForm() {
       </div>
 
       {role === "STUDENT" ? (
-        <div className="grid gap-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
           <div>
             <label className="label" htmlFor="enrollmentNo">
               Enrollment number
@@ -164,7 +172,7 @@ export function RegisterForm() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
           <div>
             <label className="label" htmlFor="childEnrollmentNo">
               Your child&apos;s enrollment number

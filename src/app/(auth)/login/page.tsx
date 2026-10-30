@@ -7,7 +7,7 @@ export default function LoginPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-        Sign in to Navika
+        Sign in to BusGuard
       </h1>
       <p className="mt-1 mb-6 text-sm text-slate-500">
         Use the email your college registered for you.

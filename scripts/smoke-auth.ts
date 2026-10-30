@@ -1,5 +1,5 @@
 /**
- * Dashboard smoke test against a running Navika server.
+ * Dashboard smoke test against a running BusGuard server.
  *
  *   npm run smoke:auth          # port from .env
  *   npm run smoke:auth 3010
@@ -32,17 +32,17 @@ const BASE = resolveBase();
  * database, so a 200 with an empty shell still fails.
  */
 const CASES: { role: Role; email: string; path: string; mustContain: string }[] = [
-  { role: "ADMIN", email: "admin@navika.test", path: "/admin", mustContain: "Fleet positions" },
+  { role: "ADMIN", email: "admin@busguard.test", path: "/admin", mustContain: "Fleet positions" },
   {
     role: "DRIVER",
-    email: "driver1@navika.test",
+    email: "driver1@busguard.test",
     path: "/driver",
     mustContain: "North-West Corridor",
   },
-  { role: "PARENT", email: "parent1@navika.test", path: "/parent", mustContain: "Aarav Sharma" },
+  { role: "PARENT", email: "parent1@busguard.test", path: "/parent", mustContain: "Aarav Sharma" },
   {
     role: "STUDENT",
-    email: "aarav.sharma0@student.navika.test",
+    email: "aarav.sharma0@student.busguard.test",
     path: "/student",
     mustContain: "Suryanagar Chowk",
   },
@@ -113,7 +113,7 @@ async function main() {
     Buffer.from(JSON.stringify({ userId: "x", role: "ADMIN" })).toString("base64url") +
     ".forged.forged";
   const res = await fetch(`${BASE}/admin`, {
-    headers: { cookie: `navika_session=${forged}` },
+    headers: { cookie: `busguard_session=${forged}` },
     redirect: "manual",
   });
   record(
@@ -155,7 +155,7 @@ async function main() {
    * lookup - if the throttle only counted accounts that exist, this address would
    * never lock and the assertion below would fail.
    */
-  const absent = `throttle-probe-${process.pid}@navika.test`;
+  const absent = `throttle-probe-${process.pid}@busguard.test`;
 
   let stillWrong = true;
   for (let n = 1; n <= 4 && stillWrong; n++) {

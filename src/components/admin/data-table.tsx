@@ -20,13 +20,18 @@ export function DataTable({
     <div className="-mx-5 overflow-x-auto px-5">
       <table className="w-full min-w-[40rem] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left">
+          {/* A rule under the header rather than a filled band. A band would
+              have to be painted edge to edge to look deliberate, and the table
+              is inset inside a card that already has its own padding - a grey
+              block that stops 20px short of the edge reads as a mistake. A
+              heavier border says the same thing with no geometry to get wrong. */}
+          <tr className="border-b-2 border-slate-200 text-left">
             {head.map((h, i) => (
               <th
                 key={h}
                 scope="col"
-                className={`py-2 pr-4 text-xs font-semibold uppercase tracking-wide text-slate-500 ${
-                  i === head.length - 1 ? "text-right" : ""
+                className={`py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500 ${
+                  i === head.length - 1 ? "pr-4 text-right" : "pr-4"
                 }`}
               >
                 {h}
@@ -46,7 +51,7 @@ export function DataTable({
 /**
  * One data row.
  *
- * Carries `navika-row` so the row lights up under the pointer and while focus is
+ * Carries `busguard-row` so the row lights up under the pointer and while focus is
  * inside it. The focus half is the load-bearing one: every row's action is a
  * link, so a keyboard user tabbing down a list needs the row to say which line
  * they are on, and it cannot see a hover state at all.
@@ -56,7 +61,11 @@ export function Row({
 }: {
   children: ReactNode;
 }) {
-  return <tr className="navika-row align-middle">{children}</tr>;
+  // No zebra striping, deliberately. `busguard-row` lights a row up on hover and
+  // on focus-within, and a tinted odd row sits at almost the same value as that
+  // hover, so half the rows would swallow the very feedback the class exists to
+  // give. `divide-y` in DataTable already supplies the horizontal rhythm.
+  return <tr className="busguard-row align-middle">{children}</tr>;
 }
 
 export function Cell({

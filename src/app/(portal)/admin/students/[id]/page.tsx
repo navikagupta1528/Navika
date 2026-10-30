@@ -101,6 +101,7 @@ export default async function StudentDetailPage({
       <PageHeader
         title={student.user.name}
         description={`${student.enrollmentNo}${student.department ? ` · ${student.department}` : ""}${student.yearOfStudy ? ` · year ${student.yearOfStudy}` : ""}`}
+        icon="students"
         action={
           <div className="flex flex-wrap gap-2">
             <a
@@ -178,6 +179,7 @@ export default async function StudentDetailPage({
           <div className="space-y-6">
             <Card>
               <CardTitle
+                icon="students"
                 hint="Only completed trips count. Cancelled ones are excluded, not shown as misses."
                 action={
                   <form method="get" className="flex flex-wrap items-end gap-2">
@@ -222,6 +224,7 @@ export default async function StudentDetailPage({
 
               {history.length === 0 ? (
                 <EmptyState
+                  icon="trips"
                   title="No trips in this range"
                   description="Attendance appears once the student is on a bus assignment and a trip has run. Try a wider date range."
                 />
@@ -306,7 +309,7 @@ export default async function StudentDetailPage({
 
           <div className="space-y-6">
             <Card>
-              <CardTitle>Student</CardTitle>
+              <CardTitle icon="students">Student</CardTitle>
               <DetailList
                 items={[
                   { label: "Enrolment no", value: student.enrollmentNo },
@@ -337,7 +340,10 @@ export default async function StudentDetailPage({
             </Card>
 
             <Card>
-              <CardTitle hint="One per direction. Past assignments stay on record.">
+              <CardTitle
+                icon="bus"
+                hint="One per direction. Past assignments stay on record."
+              >
                 Bus assignments
               </CardTitle>
               {student.enrollments.length === 0 ? (
@@ -397,7 +403,10 @@ export default async function StudentDetailPage({
             </Card>
 
             <Card>
-              <CardTitle hint="Notifications need at least one linked guardian.">
+              <CardTitle
+                icon="users"
+                hint="Notifications need at least one linked guardian."
+              >
                 Guardians
               </CardTitle>
               {student.guardians.length === 0 ? (

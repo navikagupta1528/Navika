@@ -1,5 +1,5 @@
 /**
- * Navika's service worker.
+ * BusGuard's service worker.
  *
  * Handles two things the page cannot: notifications arriving while the tab is
  * closed, and turning a tapped notification into a navigation. Both are
@@ -15,7 +15,7 @@
 /* global self, caches */
 
 // Bump on any change to this file. The activation logic below compares it.
-const VERSION = "navika-sw-v1";
+const VERSION = "busguard-sw-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -35,10 +35,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Navika",
+    title: "BusGuard",
     body: "You have a new notification.",
     href: "/notifications",
-    tag: "navika",
+    tag: "busguard",
   };
 
   // `event.data` is absent when the push was sent without a body, and
@@ -58,12 +58,14 @@ self.addEventListener("push", (event) => {
       // `tag` collapses a burst of messages about the same subject into one
       // notification. Without it, three pick-ups in a row would leave three
       // separate alerts and the last one would be the only one read.
-      tag: payload.tag ?? "navika",
+      tag: payload.tag ?? "busguard",
       renotify: true,
-      // No icon paths: this project ships SVG app icons, and a manifest entry
-      // pointing at a file that does not exist logs a 404 on every push and
-      // shows the notification with a broken image. The browser's default icon
-      // is better than that, so the keys are simply omitted.
+      // A real logo now exists, so a pick-up alert carries the BusGuard mark
+      // instead of the browser's generic globe. `badge` is the small monochrome
+      // slot Android draws in the status bar; it renders the same asset as a
+      // silhouette, which is exactly what that slot wants.
+      icon: "/logo.png",
+      badge: "/logo.png",
       data: { href: payload.href ?? "/notifications" },
     }),
   );
@@ -81,7 +83,7 @@ self.addEventListener("notificationclick", (event) => {
         includeUncontrolled: true,
       });
 
-      // Reuse an open Navika tab rather than piling up new ones: a parent who
+      // Reuse an open BusGuard tab rather than piling up new ones: a parent who
       // has been left on the tracking page should land back on it.
       for (const client of windows) {
         if (new URL(client.url).origin !== self.location.origin) continue;

@@ -1,8 +1,10 @@
-# Navika
+# BusGuard
 
 Student-aware smart college and school bus management and tracking.
 
-Most bus tracking products show a dot on a map. Navika tracks **people**: which
+**Know where the bus is. Know your child is on it.**
+
+Most bus tracking products show a dot on a map. BusGuard tracks **people**: which
 student is assigned to which bus, which stop they board at, whether they have
 stepped out of the house yet, and whether they actually got picked up. That is
 what makes it useful to a parent at 7:40 in the morning.
@@ -14,14 +16,14 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 392 unit tests, 250 HTTP smoke
-checks across seven suites, Lighthouse 99 / 100 / 100 / 100 on both public
-pages, 36 routes building.**
+Current state: **typecheck and lint clean, 526 unit tests, 297 HTTP smoke
+checks across twelve suites, Lighthouse 98 / 100 / 100 / 100 on all three public
+pages, 38 routes building.**
 
 **Phase 0 - foundation**
 
 - Next.js 16 App Router, TypeScript, Tailwind v4
-- PostgreSQL 17 via Prisma 7, 18 models and 9 enums with real foreign keys
+- PostgreSQL 17 via Prisma 7, 19 models and 9 enums with real foreign keys
 - Session auth: httpOnly cookie, `jose` JWT, four roles
 - Sign-in and registration throttling, with the per-account and per-address
   budgets deliberately on different schedules — see
@@ -75,13 +77,32 @@ pages, 36 routes building.**
 - No container image: Render's native Node builder runs the same command
   sequence as a laptop, which is what made this deployable at all
 
-**Beyond the roadmap** — five areas built after the six phases were met:
+**Beyond the roadmap** — thirteen areas built after the six phases were met:
+
+- **Arrival intelligence.** The ETA a parent actually watches was the one number
+  on the tracking screen that never moved: it was computed once on the server and
+  passed as a prop, so the socket driving the map left it frozen. It now counts
+  down live, and two geofence rings around each stop send a "bus is almost at
+  your stop" push at ~800 m and an "at your stop" one at ~150 m. The ring
+  decision is pure and tested (`src/lib/geofence.ts`), the countdown arithmetic
+  is pure and tested (`src/lib/arrival.ts`), and a `StopApproach` row makes each
+  alert fire exactly once per stop, direction and day — durably, so a restart
+  mid-run does not re-notify. See [Arrival intelligence](#arrival-intelligence).
 
 - **Motion and measured performance.** CSS-only entrances, hover lift, press
   feedback, an active-nav rail, sweeping skeletons and an ambient background on
   the sign-in screens, plus a Lighthouse run wired into `npm run lighthouse`
   that fails the build on a regression. The rules the motion follows and the
-  three real defects measuring it uncovered are in **Design decisions** below.
+  defects measuring it uncovered — including the icon change that took the
+  landing page from 86 to 98 — are in **Design decisions** below.
+
+- **A public landing page, and a visual pass over every signed-in screen.** `/`
+  is a real marketing page now (hero, product preview, features, roles, call to
+  action) instead of a redirect pole, so a stranger can see what the product is
+  before making an account — while the proxy still sends a signed-in visitor
+  straight to their own dashboard. Underneath it, one set of shared primitives
+  was restyled and an icon layer replaced the emoji glyphs, so a change to a
+  `Card` or a `PageHeader` reaches every page at once instead of forty copies.
 - **CSV exports.** Attendance across a date range, per-student history, and a
   trip manifest. The escaping and the formula-injection guard live in a pure
   module (`src/lib/csv.ts`, 37 tests) because a spreadsheet that silently
@@ -100,6 +121,58 @@ pages, 36 routes building.**
   after React has begun streaming — so an anonymous visitor received a 200
   carrying the app shell with the redirect arriving later as a meta-refresh tag.
   The proxy now answers before anything renders, making it a real 307.
+- **"The bus left without your child."** The alert that matters most to a family
+  is the one the geofence cannot produce: the bus came, and then it went, and the
+  child who pressed "I'm waiting" is still standing there. A departure is a
+  third ring in `StopApproach` (`DEPARTED`), claimed before the roster is
+  written, and it resolves the stop's pickup records the way the enum always
+  said it should — `WAITING` becomes `MISSED` (a safety incident, pushed to the
+  guardian with the driver's phone number and a one-tap "My child is safe"
+  resolve) and `PENDING` becomes `ABSENT` (bookkeeping, pushed to nobody). A
+  child already ticked on is never demoted. The decision is pure
+  (`src/lib/boarding.ts`, 14 tests); `npm run smoke:boarding` proves the wiring
+  against a real database. Real trips only — a simulated bus has no roster, so
+  there is nobody to be left behind.
+- **Live delay intelligence.** A stop scheduled for 07:30 that the bus reaches at
+  7:38 is eight minutes late, and the family waiting there is told so — in the
+  arrival message itself ("It is running 8 min late.") and as a separate push
+  once the delay clears five minutes. The threshold is the point: below it the
+  number is noise that trains people to ignore the alert. The arithmetic is pure
+  (`src/lib/delay.ts`, 13 tests); `npm run smoke:delay` proves the ring is
+  claimed before the notification and that a second arrival sends nothing.
+- **Driver safety scorecard.** The GPS stream was being used to draw a dot; it
+  is now also scored. Two consecutive fixes reveal what one cannot — a harsh
+  brake, a hard acceleration, an overspeed — and a week of those events collapses
+  into a single rankable number per driver, worst first, on `/admin/safety`.
+  The events are persisted, because a manager told "this driver scored 45" will
+  ask "what did they do?" and the answer has to be a list of moments. The
+  detection and scoring are pure (`src/lib/driving.ts`, 16 tests); the previous
+  fix is held in memory and the events in the database, so a missed
+  classification after a restart costs one event while a lost event would cost
+  the audit trail.
+- **Reporting a bus without a phone.** A driver's browser is not the only way a
+  bus can report, and for a real fleet it is often not the way at all. A tracker
+  fitted to the vehicle authenticates with a per-bus bearer token — shown once,
+  stored only as a hash — and posts to `POST /api/ingest/location`. The endpoint
+  shares `applyPosition` with the driver's Socket.IO ping, so the two paths cannot
+  disagree about what a position means. The token model, admission control and
+  freshness rule are pure and tested (`src/lib/device-token.ts`,
+  `src/lib/device-ingest.ts`); the mint/revoke UI sits on the bus screen.
+  See [Reporting a bus without a phone](#reporting-a-bus-without-a-phone).
+- **Multi-instance broadcasting.** One process broadcasts to its own clients for
+  free; two are two fleets, and the failure is invisible — every page renders and
+  half of them watch a frozen map. `REDIS_URL` now swaps Socket.IO onto a shared
+  adapter, opt-in so the single-instance deployment ships exactly as before. The
+  decision is pure and tested (`src/lib/realtime-scaling.ts`), and `/api/health`
+  reports the mode under `realtime`.
+- **Production hardening.** Two quiet failure modes closed. A production build
+  still pointed at OpenStreetMap's public tile server — which the OSM policy does
+  not cover, and whose failure is a grey map rather than an error — now warns in
+  the browser console on every map load (`src/lib/map-tiles.ts`). And a ping
+  replayed out of a phone's socket buffer was re-stamped with the server's clock,
+  drawing the bus jumping backwards; the client now sends its own fix timestamp
+  and the server refuses anything older than the window it already uses
+  (`classifyReportAge`).
 
 ## Sign-in throttling
 
@@ -218,6 +291,108 @@ compare what each page prints against a direct count from the database, which is
 the only way to catch a truncation bug — the truncation was invisible precisely
 because the page was self-consistent.
 
+## Arrival intelligence
+
+The question this feature answers is the one the whole product exists for: *is
+my child's bus nearly here, and has the bus reached us yet?*
+
+**The ETA was the only frozen number on a live page.** The tracking screen
+streams the bus's position over Socket.IO and moves the dot on the map, but the
+"arriving in N minutes" figure beside it was computed once on the server and
+passed as a prop. A parent who opened the page with the bus five minutes out saw
+`5 min` for those five minutes. That is worse than showing nothing, because it
+looks live.
+
+The countdown now recomputes from each position the socket delivers, and — this
+is the part that makes it feel alive — it *decays* the estimate by the age of the
+fix. A bus that pinged eight seconds ago is eight seconds closer than the figure
+computed from that ping alone implies, so the number ticks down between pings
+instead of jumping when the next one lands. The arithmetic is pure
+(`src/lib/arrival.ts`) and shared with the map popup, so the card and the popup
+cannot disagree.
+
+**Two rings, not one alert.** A single "the bus is here" notification is too late
+to be useful — by the time it arrives the child has to run. Each stop has two
+thresholds:
+
+| Ring | Distance | What it tells a family |
+| ---- | -------- | ---------------------- |
+| `APPROACHING` | ~800 m | the bus is on its way; get ready |
+| `ARRIVING` | ~150 m | the bus is at the kerb; go now |
+
+When a position lands inside both — a bus that jumped, or the first fix after a
+tunnel — only the tighter ring fires, because "in 3 minutes" and "arriving now"
+in the same breath is worse than the accurate one. In the ordinary case the bus
+crosses the outer ring minutes before the inner, so both arrive, well spaced.
+
+**Once per stop, per run — and it survives a restart.** A bus spends minutes
+inside the 800 m ring, reporting every few seconds. An in-memory "already sent"
+set would notify four times a minute for two minutes, and would re-notify every
+stop the bus had already served the moment the server restarted. So the claim is
+a row: `StopApproach`, unique on `(bus, stop, direction, ring, date)`, written
+*before* the notifications go out. Two ticks racing through the watcher cannot
+both win the unique constraint; a deploy mid-run cannot replay an alert. The row
+is a date, so tomorrow's bus notifies again, and a boot sweep trims rows older
+than a fortnight.
+
+**The alert goes to the people at that stop, not to a role.** Recipients are
+resolved through `Enrollment`: the guardians — and the student — of the children
+enrolled to board that bus at that stop, in that direction. Notifying "all
+parents" would leak one child's bus position to families whose children are not
+on it, which is the same mistake the pick-up notification was built to avoid.
+
+`npm run smoke:geofence` proves the parts a unit test cannot: that the dedup row
+is written before the notification, that a second tick sends nothing, that the
+message names the stop and deep-links to the map, and that it reaches a real
+guardian row in the database.
+
+## Reporting a bus without a phone
+
+Everything above assumes the driver has a browser open. The ordinary installation
+for a school is the opposite: a tracker is fitted to the vehicle and reports
+whether or not anyone's phone is awake. That path exists now, and it is deliberately
+narrow.
+
+**One endpoint, one token per bus.** An admin opens a bus and generates a tracker
+token; the plaintext is shown once and only ever the hash is stored. The device
+then posts to it:
+
+```bash
+curl -X POST "$APP_URL/api/ingest/location" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"lat":18.5204,"lng":73.8567,"speedKph":31,"headingDeg":148,"recordedAt":"2026-10-17T07:12:03Z"}'
+```
+
+`speedKph`, `headingDeg` and `accuracyM` are optional; `recordedAt` is the
+device's own clock and is what makes the freshness check possible. A token is
+revoked rather than deleted, so the panel can still show what the device was and
+when it stopped being trusted.
+
+**The same pipeline as a driver's phone.** The endpoint does not have its own
+idea of what a position means. It shares `applyPosition` with the Socket.IO ping,
+so a tracker and a phone cannot drift apart on validation, the onboard count, the
+broadcast, the persist cadence or the three watchers that hang off the same
+stream (approach, departure, driving).
+
+**A replayed fix is refused, not re-stamped.** Socket.IO buffers a phone's events
+while it is out of signal and flushes them on reconnect, and each buffered event
+carries the timestamp of when the fix was *taken*. The server previously stamped
+arrival time onto everything, so a five-minute-old fix would arrive looking fresh
+and draw the bus jumping backwards to where it was five minutes ago — the exact
+teleport the client rules exist to prevent, hidden by a fresh timestamp. The
+device now sends `recordedAt` and the server rejects a report older than the same
+sixty-second window the client uses (`classifyReportAge`), answering `409` instead
+of pretending. An untimestamped report is still accepted: it is either an older
+client or the server's own simulator, and neither is replaying anything.
+
+`npm run smoke:ingest` proves the boundary, not the library: that a report with
+no token is refused, that a revoked token stops working the instant it is revoked,
+that a ping inside the minimum interval is dropped with a `Retry-After`, that a
+replayed fix is rejected with `409`, that two trackers on one bus do not throttle
+each other, and that an accepted ping writes the bus row exactly as a driver's
+phone does.
+
 ## Stack
 
 | Concern            | Choice                             | Why                                                              |
@@ -247,23 +422,23 @@ npm install
 
 ### 2. Create the database
 
-Navika uses its **own** PostgreSQL cluster at `C:\navika-pg` on **port 5433**, so
+BusGuard uses its **own** PostgreSQL cluster at `C:\navika-pg` on **port 5433**, so
 it never touches the PostgreSQL 17 service on 5432 that belongs to ZyniVerse.
 
 ```bash
 npm run setup:db
 ```
 
-That script initialises the cluster, creates the `navika` role and `navika`
+That script initialises the cluster, creates the `busguard` role and `busguard`
 database with a generated password, switches its `pg_hba.conf` to
 `scram-sha-256`, and writes `.env` for you.
 
 If you would rather do it by hand against an existing server:
 
 ```sql
-CREATE ROLE navika LOGIN PASSWORD 'pick-something';
-CREATE DATABASE navika OWNER navika;
-ALTER ROLE navika CREATEDB;   -- Prisma needs this to create the shadow database
+CREATE ROLE busguard LOGIN PASSWORD 'pick-something';
+CREATE DATABASE busguard OWNER busguard;
+ALTER ROLE busguard CREATEDB;   -- Prisma needs this to create the shadow database
 ```
 
 Then copy `.env.example` to `.env` and fill in `DATABASE_URL` and `AUTH_SECRET`:
@@ -290,9 +465,15 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-> **After a reboot**, start the database first with `npm run db:start`. It is a
-> plain process, not a Windows service, so it does not come up on its own. To
-> make that permanent, register it once as Administrator:
+`npm run dev` starts the database first and the app second, so one command is
+all it takes — including the first run after a reboot. `db:start` exits
+immediately when the cluster is already listening, so the extra step costs
+nothing on a machine where it is already up. Only the production `npm start`
+skips it, because on a deployed host the database is managed separately.
+
+> The cluster at `C:\navika-pg` is a plain process, not a Windows service, so it
+> does not come up on its own. To make it start with Windows and skip this
+> entirely, register it once as Administrator:
 >
 > ```powershell
 > & "$env:ProgramFiles\PostgreSQL\17\bin\pg_ctl.exe" register -N "NavikaPG" -D "C:\navika-pg" -S auto
@@ -301,21 +482,21 @@ Open <http://localhost:3000>.
 ### Port
 
 `npm run dev` reads `PORT`, falling back to 3000. ZyniVerse already uses 3000,
-so Navika's `.env` sets `PORT=3010`. It belongs in `.env` rather than only in
+so BusGuard's `.env` sets `PORT=3010`. It belongs in `.env` rather than only in
 the shell that happened to start the server, or the next `npm run dev` silently
 collides.
 
 ### Demo accounts
 
-Password for all of them: `navika123`
+Password for all of them: `busguard123`
 
 | Role    | Email                               |
 | ------- | ----------------------------------- |
-| Admin   | `admin@navika.test`                 |
-| Driver  | `driver1@navika.test`               |
-| Driver  | `driver2@navika.test`               |
-| Parent  | `parent1@navika.test`               |
-| Student | `aarav.sharma0@student.navika.test` |
+| Admin   | `admin@busguard.test`                 |
+| Driver  | `driver1@busguard.test`               |
+| Driver  | `driver2@busguard.test`               |
+| Parent  | `parent1@busguard.test`               |
+| Student | `aarav.sharma0@student.busguard.test` |
 
 The seed stamps bus positions with `lastLocationAt` at seed time, so they fall
 outside the two-minute live window a couple of minutes after seeding. Open
@@ -329,7 +510,7 @@ npm run db:seed && npm run smoke:tracking
 
 | Command                 | What it does                                             |
 | ----------------------- | -------------------------------------------------------- |
-| `npm run dev`           | Custom server: Next.js in dev + Socket.IO                |
+| `npm run dev`           | Custom server: starts the database, then Next.js dev + Socket.IO |
 | `npm run build`         | Production build                                         |
 | `npm start`             | Custom server in production mode (run `build` first)     |
 | `npm run typecheck`     | `tsc --noEmit`                                           |
@@ -344,33 +525,45 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:boundaries` | Every portal page, every role, anonymous and wrong-role  |
 | `npm run smoke:pagination` | Real counts, disjoint pages, clamping, filters surviving paging |
 | `npm run smoke:instrument` | Prove `npm run audit`'s layout-shift observer actually fires |
-| `npm run smoke:all`     | All eight smoke suites                                    |
+| `npm run smoke:geofence` | The stop-approach alert: fires once, reaches the right guardians, dedupes on repeat |
+| `npm run smoke:boarding` | The bus-left-without-your-child alert: MISSED vs ABSENT, the right guardian told, idempotent |
+| `npm run smoke:delay`    | The late-bus alert: claimed before it sends, carried in the arrival message, deduped |
+| `npm run smoke:ingest`   | A fitted tracker: bearer auth, a revoked token refused, a replayed fix rejected, the bus row written |
+| `npm run smoke:all`     | All twelve smoke suites                                   |
 | `npm run audit`         | Every route, every role, in a real browser: console, network, hydration, WCAG, layout shift |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
 | `npm run setup:db`      | One-time database provisioning                           |
-| `npm run db:start`      | Start the local database cluster (needed after boot)     |
+| `npm run db:start`      | Start the local database cluster (run automatically by `npm run dev`) |
 | `npm run db:migrate`    | Create and apply a migration in development              |
 | `npm run db:deploy`     | Apply pending migrations (production, CI)                |
 | `npm run db:seed`       | Reset to a believable demo dataset                       |
 | `npm run db:studio`     | Prisma Studio                                            |
 | `npm run db:reset`      | Drop, re-migrate and re-seed                             |
 | `npm run setup`         | All three setup steps in order                           |
-| `npm run lighthouse`    | Score both public pages, fail on a regression              |
+| `npm run lighthouse`    | Score all three public pages, fail on a regression              |
 
 The smoke suites need a running dev server and a live database. Start both, then
 run them.
 
 ```
-npm run db:start      # if the machine has just rebooted
+npm run db:start      # only if the machine has just rebooted; npm run dev does this for you
 npm run db:seed       # resets to a demo dataset, and restores live trips
-npm start &           # or npm run dev
+npm start &           # or npm run dev, which starts the database itself
 npm run smoke:all
 ```
 
 `smoke:admin` and `smoke:tracking` write to and clean up after themselves, but
 both expect the seed: `smoke:tracking` in particular needs two `ONGOING` trips
 and will say so plainly rather than failing obscurely if the database is bare.
+
+They are not idempotent against the *seed*, though. `smoke:delay` deletes today's
+trip for the bus it exercises, `smoke:boarding` and `smoke:geofence` roll back
+their own fixtures, and `smoke:pagination` plants thirty students it later
+removes — so a second `smoke:all` without a re-seed starts from a database with
+no live trip at all, and the suites that read the seed's trips report an empty
+page as a defect. Re-run `npm run db:seed` before each full pass; the block above
+is the sequence to repeat, not a one-time setup.
 
 ## The page audit
 
@@ -380,17 +573,31 @@ can see a hydration mismatch, a Client Component that throws on mount, a chunk
 that 404s, a link that is only distinguishable by colour, or a page that jumps
 after it loads.
 
-It drives Chrome over all 48 route/role combinations and reports:
+It drives Chrome over every route/role combination it can address — 45 of them on
+a quiet database, 49 when a live trip adds a `/track` visit for each role — and
+reports:
 
 | Kind | What it catches |
 | --- | --- |
-| `console-error`, `console-warn` | Anything logged by the page, including React's hydration mismatch |
+| `console-error`, `console-warning` | Anything logged by the page, including React's hydration mismatch |
 | `page-error` | An uncaught exception |
 | `request-failed`, `bad-response` | A dropped request, or any response at or above 400 |
 | `a11y:*` | axe-core, WCAG 2.0/2.1 A and AA |
 | `layout-shift` | Cumulative Layout Shift above the 0.1 "good" line |
+| `advisory` | Printed on purpose — reported in its own section, never failed |
 
-It needs the dev server running (for `/login` and `/register`) and a seeded
+Failing on *any* console warning is the right default: in production a warning is
+nearly always a React key warning or a hydration mismatch wearing a different hat,
+and a gate that cannot fail is not a gate. The exception is the map's tile notice,
+which is supposed to print whenever a production build is still pointed at
+OpenStreetMap's public server — and `NEXT_PUBLIC_MAP_TILE_URL` is inlined into the
+bundle at build time, so it cannot be supplied at audit time to make it go away.
+Failing on it would leave the audit red on a clean checkout with nothing actually
+wrong, and six copies of it would bury the next real warning. So it is listed by
+name in `DELIBERATE_WARNINGS`, matched on a distinctive phrase rather than a
+prefix, and reported separately; every other warning still fails.
+
+It needs the dev server running (for `/`, `/login` and `/register`) and a seeded
 database (for the `[id]` routes).
 
 Two things about it are load-bearing and easy to undo by accident:
@@ -412,7 +619,7 @@ also refuses to read a number unless the observer confirms it attached.
 
 ## Deploying
 
-There is no container image. Navika is a plain long-lived Node process, and the
+There is no container image. BusGuard is a plain long-lived Node process, and the
 deploy is two commands:
 
 ```bash
@@ -465,46 +672,57 @@ Set these in the dashboard before the first deploy:
 
 ### Scaling past one instance
 
-Not yet, and deliberately not configured. Socket.IO broadcasts from whichever
-process holds a driver's connection, so with two instances a parent connected to
-the other one sees nothing move. `render.yaml` pins `numInstances: 1`. Going
-wider needs a Redis adapter first, which is a real piece of work rather than a
-config line.
+Implemented, and opt-in. Socket.IO broadcasts from whichever process holds a
+driver's connection, so two instances are two fleets: a parent on instance B
+sees a frozen map while every page renders normally, and nothing logs an error.
+`REDIS_URL` swaps the server onto a shared Redis adapter so a broadcast on one
+instance reaches a watcher on the other. Unset, it is the single-instance
+configuration this project ships, and behaves exactly as before.
+
+`/api/health` reports which mode an instance is in, under `realtime` —
+`redis` or `single-instance` — so a load-balanced deployment that forgot to set
+`REDIS_URL` is visible from the health check rather than as a mystery on the
+screen. `render.yaml` documents the two steps: create a Redis service, then set
+`REDIS_URL` from it before raising `numInstances`.
 
 ## Project layout
 
 ```
 prisma/
-  schema.prisma          18 models, 9 enums, real FK constraints
+  schema.prisma          21 models, 10 enums, real FK constraints
   seed.ts                demo dataset
 scripts/
   setup-db.ps1           one-time database provisioning
-  start-db.ps1           start the local cluster after a reboot
-  smoke-*.ts             seven HTTP suites against a running server
+  start-db.ps1           start the local cluster; `npm run dev` calls it first
+  smoke-*.ts             twelve HTTP suites against a running server
   smoke-reconcile.ts     abandoned-trip reconciliation, on real rows
   smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
   check-osrm.ts          is the routing server reachable and sane?
-  lighthouse.mjs         score both public pages, fail on a regression
+  lighthouse.mjs         score all three public pages, fail on a regression
   find-broken-line.mjs   locate the first line that breaks parsing
   lib/http.ts            shared smoke helpers
 server.ts                custom Node server: Next.js + Socket.IO
 render.yaml              Render blueprint, incl. managed Postgres
 src/
   app/
+    page.tsx             the public landing page, a Server Component
     (auth)/              login, register
     (portal)/
-      admin/             CRUD, trips, reports, alerts
+      admin/             CRUD, trips, reports, safety, alerts
       driver/            today's trip, checklist, GPS panel
       student/ parent/   dashboards, fleet, track, notifications, install
       error.tsx loading.tsx not-found.tsx   boundary files
     actions/             Server Actions, thin wrappers over lib cores
     api/health/          load balancer health check
+    api/ingest/location/route.ts  a fitted tracker reports a bus position
     api/admin/**/route.ts three guarded CSV export endpoints
   components/
+    marketing/           the public landing page, one section per export
     map/                 MapLibre canvas, route editor, vehicle popups
-    tracking/            driver tracker, live map, fleet map
-    driver/ notifications/ admin/ auth/ portal/ ui/
+    tracking/            driver tracker, live map, fleet map, arrival countdown, safe button
+    ui/                  shared primitives, and the icon registry
+    driver/ notifications/ admin/ auth/ portal/
   hooks/
     use-driver-tracker   watchPosition state machine
   lib/
@@ -519,6 +737,15 @@ src/
     queries.ts           scoped read helpers
     day-window.ts        "today" as one half-open local range, pure
     geo.ts               haversine, bearing, ETA fallback
+    arrival.ts           live countdown arithmetic, pure
+    boarding.ts           the bus-left-without-your child decision, pure
+    delay.ts              scheduled-vs-actual lateness, pure
+    driving.ts            harsh-brake / overspeed detection and scoring, pure
+    geofence.ts          stop-approach ring decisions, pure
+    device-token.ts      tracker token minting, hashing and parsing
+    device-ingest.ts     per-device ping and persist admission, pure
+    map-tiles.ts         which tile server to use, and when to warn about it, pure
+    realtime-scaling.ts  is a Redis adapter configured? pure
     osrm.ts              routing client
     osrm-parse.ts        response parsing, no network
     route-order.ts       stop ordering, no DB
@@ -541,8 +768,15 @@ src/
     utils.ts             formatting
   server/
     session-core.ts      JWT crypto with no framework dependency
-    socket.ts            Socket.IO wiring, rooms, throttling
+    socket.ts            Socket.IO wiring, rooms, throttling, Redis adapter
+    realtime-emit.ts     the server-side emitters, split out to break a cycle
+    position-pipeline.ts one place a bus position is accepted, published, recorded
+    device-auth.ts       bearer-token lookup for a fitted tracker
     simulator-runner.ts  the interval, the writes, the broadcast
+    geofence-watcher.ts  stop-approach alerts: dedup, fan-out, retention
+    boarding-watcher.ts   the bus-left-without-your-child alert and roster write
+    delay-watcher.ts      late-bus alerts from scheduled-vs-actual
+    driving-watcher.ts    GPS stream to safety events, scoring input
     trip-reconciler.ts   closes abandoned trips on boot and every 10 min
   proxy.ts               optimistic route redirects (Next 16 renamed middleware)
   generated/prisma/      generated client (git-ignored)
@@ -558,15 +792,15 @@ path-alias configuration here.
 
 Two layers, because they catch different things.
 
-**Unit tests** (`npm run test`, 410 assertions over 17 files) cover the logic
+**Unit tests** (`npm run test`, 526 assertions over 26 files) cover the logic
 where a bug is invisible from the outside: GPS acceptance, ETA parsing, stop
 ordering, freshness decay, CSV escaping, route-movement maths, trip liveness,
-and health classification. These modules deliberately import nothing from the
-database, the network or the DOM, which is what makes them testable at all — and
-is why they use relative sibling imports rather than `@/lib/...`, because Vitest
-has no path-alias configuration here.
+arrival countdown, geofence rings, and health classification. These modules
+deliberately import nothing from the database, the network or the DOM, which is
+what makes them testable at all — and is why they use relative sibling imports
+rather than `@/lib/...`, because Vitest has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 255 checks over eight suites) run against a
+**Smoke suites** (`npm run smoke:all`, 297 checks over twelve suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
@@ -578,8 +812,11 @@ authorization bugs, and those only appear when a real session meets a real row:
 | `smoke:admin`       |     48 | CRUD, referential guards, trip lifecycle, attendance reports  |
 | `smoke:tracking`    |     96 | Authorization on `/track`, the driver checklist, attendance writes and their refusals, notification fan-out, alerts, the health endpoint |
 | `smoke:reconcile`   |     10 | Abandoned trips close; live ones are left alone                |
-| `smoke:boundaries`  |     51 | 28 pages requested anonymously, a 4×4 role matrix, deep links, forged cookies, the API |
+| `smoke:boundaries`  |     57 | 27 portal pages requested anonymously, the landing page answering an anonymous visitor, a 4×4 role matrix (including each role bounced off `/`), deep links, forged cookies, the API |
 | `smoke:pagination`  |     19 | Counts against the database, page two disjoint from page one, clamping, filters surviving paging |
+| `smoke:geofence`    |      7 | The stop-approach alert: the dedup row is written before the notification, a repeat tick sends nothing, the message names the stop and deep-links, and it reaches a real guardian row |
+| `smoke:boarding`    |     10 | The bus-left-without-your-child alert: a waiting student becomes MISSED, an unmarked one ABSENT, a child already on the bus is never demoted, the guardian is told, and a second tick changes nothing |
+| `smoke:delay`       |      6 | The late-bus alert: the delay ring is claimed before the notification, the arrival message carries the delay, and a second arrival sends nothing |
 
 **The page audit** (`npm run audit`) is the third layer and the only one that
 opens a page in a browser. It is described under [The page audit](#the-page-audit)
@@ -616,11 +853,14 @@ Three limits worth stating plainly:
   pages but does not click anything either.
 - Socket broadcast payload shape is covered by the handshake suite but not by a
   full end-to-end delivery assertion.
-- Lighthouse is measured against `/login` and `/register` on a developer
+- Lighthouse is measured against `/`, `/login` and `/register` on a developer
   laptop. Mobile emulation applies a 4× CPU slowdown and a slow-4G profile, so
-  a real phone on a real network will differ — in either direction. Authenticated
-  pages are not scored, because a Lighthouse run would have to log in first and
-  the number would then depend on the seed rather than the code.
+  a real phone on a real network will differ — in either direction. All three are
+  measured against a production build, not the dev server: React's development
+  bundle, unminified code and missing source maps cost 20–30 performance points,
+  which is why the dev-server score is not the one quoted anywhere here.
+  Authenticated pages are not scored, because a Lighthouse run would have to log
+  in first and the number would then depend on the seed rather than the code.
 
 ## Design decisions worth knowing
 
@@ -728,15 +968,35 @@ nobody on that page could see was competing for bandwidth with the resources
 LCP was actually waiting on. That was most of the LCP improvement. If a real
 mono face is ever wanted, it belongs in the admin layout, not the root one.
 
-**Lighthouse scores `/login` *and* `/register`, not just the first one.** They
-share a layout but not their markup, and `/register` was sitting at 96
-accessibility while `/login` read 100. The cause was the ambient gradient: text
+**Lighthouse scores `/`, `/login` *and* `/register`, not just the first one.**
+The auth pages share a layout but not their markup, and `/register` was sitting at
+96 accessibility while `/login` read 100. The cause was the ambient gradient: text
 at `slate-500` measures 3.8:1 where a blob drifts behind it, against a 4.5:1
 floor, so the failure depended on where the animation happened to be mid-sweep.
 Scoring one page would have left it in place indefinitely, because the passing
 page says nothing about the failing one. This is the failure mode decorative
 backgrounds create — text verified once against a flat colour, then silently
-made conditional on animation timing.
+made conditional on animation timing. The landing page joined the set when it
+became the third page a stranger can reach: it shares no markup with the auth
+screens at all, so the same argument applies with more force.
+
+**An icon is not worth a client entry point.** The icon layer started as a
+`"use client"` module wrapping `lucide-react`, on the reasoning that lucide's own
+components sit behind that boundary and so the whole set should live on one side
+of the same fence. That reasoning is sound and the conclusion was still expensive:
+a `"use client"` module is a client *entry point*, so every page whose graph
+touched an icon — the public landing and sign-in pages included — pulled the
+entire set into the browser and evaluated it. Measured against the landing page,
+that was **429 ms of Total Blocking Time and a performance score of 86**. Left as
+a plain module, the same icons are rendered to static SVG during the server pass
+and only the glyphs a Client Component actually renders ship: the page now
+**scores 98 with 42 ms of blocking time**, and `/login` and `/register` move with
+it. The string-keyed registry survives because it has to — a component is not
+serialisable, so `PortalShell` (a Client Component) receives `icon: IconName` and
+resolves it, and the union keeps a typo a compile error. What changed is only
+which side of the boundary that registry lives on. The lesson is that
+`"use client"` is not a tag you add to be safe; it is a decision about what the
+browser downloads and runs, and it is worth measuring before believing it.
 
 **A trip's status column is not proof that a trip is alive.** `ONGOING` is set by
 `startTrip` and cleared by `completeTrip`, and nothing owns the trip in between.

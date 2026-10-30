@@ -32,6 +32,7 @@ export default async function NewBusPage({
       <PageHeader
         title="New bus"
         description="Add a vehicle to the fleet and put it on a route."
+        icon="fleet"
         action={
           <Link href="/admin/buses" className="btn-secondary">
             Back to fleet
@@ -41,7 +42,11 @@ export default async function NewBusPage({
 
       <div className="max-w-3xl">
         <Card>
-          <CardTitle hint="A bus needs a route with at least one stop before it can run trips.">
+          <CardTitle
+            icon="fleet"
+            size="md"
+            hint="A bus needs a route with at least one stop before it can run trips."
+          >
             Bus details
           </CardTitle>
           <EntityForm

@@ -123,7 +123,7 @@ describe("the per-IP schedule", () => {
      */
     const store = createThrottleStore();
     for (let n = 0; n < IP_FREE_ATTEMPTS; n++) {
-      chargeFailure(store, budgetsFor("login", `student${n}@navika.test`, NAT), T0);
+      chargeFailure(store, budgetsFor("login", `student${n}@busguard.test`, NAT), T0);
     }
     expect(store.check(ipKey("login", NAT), T0)).toBe(true);
   });
@@ -131,7 +131,7 @@ describe("the per-IP schedule", () => {
   it("still refuses a script that keeps going past that", () => {
     const store = createThrottleStore();
     for (let n = 0; n <= IP_FREE_ATTEMPTS; n++) {
-      chargeFailure(store, budgetsFor("login", `student${n}@navika.test`, NAT), T0);
+      chargeFailure(store, budgetsFor("login", `student${n}@busguard.test`, NAT), T0);
     }
     expect(store.check(ipKey("login", NAT), T0)).toBe(false);
   });
@@ -144,9 +144,9 @@ describe("the per-IP schedule", () => {
      */
     const store = createThrottleStore();
     for (let n = 0; n < 20; n++) {
-      chargeFailure(store, budgetsFor("login", `student${n}@navika.test`, NAT), T0);
+      chargeFailure(store, budgetsFor("login", `student${n}@busguard.test`, NAT), T0);
     }
-    const target = budgetsFor("login", "aarav.sharma0@student.navika.test", NAT);
+    const target = budgetsFor("login", "aarav.sharma0@student.busguard.test", NAT);
     expect(store.check(target.email, T0)).toBe(true);
 
     for (let n = 0; n < 3; n++) store.fail(target.email, T0, LOCKOUT_SECONDS);
@@ -159,14 +159,14 @@ describe("the per-IP schedule", () => {
 
 describe("throttleKey", () => {
   it("treats the same address in different cases as one budget", () => {
-    expect(throttleKey("login", "Aarav@Navika.Test")).toBe(
-      throttleKey("login", "aarav@navika.test"),
+    expect(throttleKey("login", "Aarav@BusGuard.Test")).toBe(
+      throttleKey("login", "aarav@busguard.test"),
     );
   });
 
   it("ignores surrounding whitespace", () => {
-    expect(throttleKey("login", "  aarav@navika.test ")).toBe(
-      throttleKey("login", "aarav@navika.test"),
+    expect(throttleKey("login", "  aarav@busguard.test ")).toBe(
+      throttleKey("login", "aarav@busguard.test"),
     );
   });
 
@@ -185,7 +185,7 @@ describe("throttleKey", () => {
     // These strings become Map keys; an unbounded user-supplied key is one more
     // thing to hold in memory under load.
     const short = throttleKey("login", "a@x.com");
-    const long = throttleKey("login", `${"x".repeat(500)}@navika.test`);
+    const long = throttleKey("login", `${"x".repeat(500)}@busguard.test`);
     expect(long.length).toBe(short.length);
   });
 
@@ -377,7 +377,7 @@ describe("the trap this module exists to avoid", () => {
      * which addresses are real from who gets locked out.
      */
     const store = createThrottleStore();
-    const victim = throttleKey("login", "aarav.sharma0@student.navika.test");
+    const victim = throttleKey("login", "aarav.sharma0@student.busguard.test");
 
     for (let n = 0; n < 6; n++) store.fail(victim, T0, LOCKOUT_SECONDS);
 
@@ -393,8 +393,8 @@ describe("the trap this module exists to avoid", () => {
      * password" would tell an attacker which addresses are registered - the whole
      * student and guardian roster. Both must spend budget identically.
      */
-    const real = throttleKey("login", "aarav.sharma0@student.navika.test");
-    const invented = throttleKey("login", "nobody@student.navika.test");
+    const real = throttleKey("login", "aarav.sharma0@student.busguard.test");
+    const invented = throttleKey("login", "nobody@student.busguard.test");
 
     const store = createThrottleStore();
     for (let n = 0; n < 4; n++) {

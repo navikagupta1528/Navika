@@ -1,5 +1,5 @@
 /**
- * Navika demo seed.
+ * BusGuard demo seed.
  *
  * Produces a believable small college: 3 routes, 12 stops, 5 buses, 6 drivers,
  * 40 students, 8 parents, live enrolments and a couple of trips in progress.
@@ -128,7 +128,7 @@ function pick<T>(arr: T[]): T {
 }
 
 async function main() {
-  console.log("Seeding Navika…\n");
+  console.log("Seeding BusGuard…\n");
 
   // Clear in dependency order so re-running is safe.
   await prisma.notification.deleteMany();
@@ -149,7 +149,7 @@ async function main() {
   await prisma.bus.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash("navika123", 10);
+  const passwordHash = await bcrypt.hash("busguard123", 10);
   console.log("  · wiped existing data");
 
   // ---------------------------------------------------------------- stops
@@ -191,14 +191,14 @@ async function main() {
   // ---------------------------------------------------------------- admin
   const admin = await prisma.user.create({
     data: {
-      email: "admin@navika.test",
+      email: "admin@busguard.test",
       passwordHash,
       name: "Anita Deshpande",
       phone: "+91 98220 11001",
       role: Role.ADMIN,
     },
   });
-  console.log("  · admin@navika.test / navika123");
+  console.log("  · admin@busguard.test / busguard123");
 
   // -------------------------------------------------------------- drivers
   const driverUsers = [];
@@ -206,7 +206,7 @@ async function main() {
     const name = `${FIRST_NAMES[i * 3]} ${LAST_NAMES[i]}`;
     const user = await prisma.user.create({
       data: {
-        email: `driver${i + 1}@navika.test`,
+        email: `driver${i + 1}@busguard.test`,
         passwordHash,
         name,
         phone: `+91 98220 2${1000 + i}`,
@@ -222,7 +222,7 @@ async function main() {
     });
     driverUsers.push(user);
   }
-  console.log(`  · ${driverUsers.length} drivers (driver1@navika.test / navika123)`);
+  console.log(`  · ${driverUsers.length} drivers (driver1@busguard.test / busguard123)`);
 
   // ----------------------------------------------------------------- buses
   const buses = [];
@@ -269,7 +269,7 @@ async function main() {
 
     const user = await prisma.user.create({
       data: {
-        email: `${first.toLowerCase()}.${last.toLowerCase()}${i}@student.navika.test`,
+        email: `${first.toLowerCase()}.${last.toLowerCase()}${i}@student.busguard.test`,
         passwordHash,
         name,
         phone: `+91 90040 ${10000 + i}`,
@@ -297,7 +297,7 @@ async function main() {
     const parentName = `${i % 2 === 0 ? "Sunita" : "Mahesh"} ${student.name.split(" ")[1]}`;
     const user = await prisma.user.create({
       data: {
-        email: `parent${i + 1}@navika.test`,
+        email: `parent${i + 1}@busguard.test`,
         passwordHash,
         name: parentName,
         phone: `+91 90050 ${20000 + i}`,
@@ -312,7 +312,7 @@ async function main() {
     });
     parents.push(user);
   }
-  console.log(`  · ${parents.length} parents (parent1@navika.test / navika123)`);
+  console.log(`  · ${parents.length} parents (parent1@busguard.test / busguard123)`);
 
   // ----------------------------------------------------------- enrolments
   let enrolmentCount = 0;
@@ -429,11 +429,11 @@ async function main() {
   });
   console.log("  · 1 open alert");
 
-  console.log("\nDemo accounts (password for all: navika123)");
-  console.log("  admin   admin@navika.test");
-  console.log("  driver  driver1@navika.test");
-  console.log("  parent  parent1@navika.test");
-  console.log("  student aarav.sharma0@student.navika.test");
+  console.log("\nDemo accounts (password for all: busguard123)");
+  console.log("  admin   admin@busguard.test");
+  console.log("  driver  driver1@busguard.test");
+  console.log("  parent  parent1@busguard.test");
+  console.log("  student aarav.sharma0@student.busguard.test");
   console.log(`\n  ${admin.name} (admin id ${admin.id})`);
   console.log("");
 }

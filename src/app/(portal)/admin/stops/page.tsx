@@ -21,6 +21,7 @@ export default async function StopsPage() {
       <PageHeader
         title="Stops"
         description="Pickup points. Coordinates drive the map and the ETA, so drop a pin rather than guessing."
+        icon="stops"
         action={
           <Link href="/admin/stops/new" className="btn-primary">
             New stop
@@ -30,6 +31,7 @@ export default async function StopsPage() {
 
       <Card>
         <CardTitle
+          icon="stops"
           hint={`${stops.length} stop${stops.length === 1 ? "" : "s"} · ${
             stops.filter((s) => !s.isActive).length
           } inactive`}

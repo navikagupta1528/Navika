@@ -17,7 +17,9 @@
  */
 
 import { prisma } from "@/lib/db";
-import { pushBusLocation, pushStopArrival } from "./socket";
+import { pushBusLocation, pushStopArrival } from "./realtime-emit";
+import { evaluateGeofence } from "./geofence-watcher";
+import { Direction } from "@/generated/prisma/enums";
 import {
   advance,
   buildPath,
@@ -285,6 +287,28 @@ async function tick(busId: string, path: SimPath, entry: Running): Promise<void>
       simulated: true,
     });
   }
+
+  /*
+   * Geofence alerts for the families waiting at a stop.
+   *
+   * Fire-and-forget on purpose: `evaluateGeofence` never throws and does no
+   * database work at all unless the bus is inside the 800 m ring of a stop, so
+   * the common tick pays for this with a few dozen haversines and nothing else.
+   * Not awaited, because a slow alert write must not stretch the loop that
+   * drives the bus — the bus moving smoothly is the feature being demonstrated.
+   *
+   * A simulated bus has no `Trip`, so `tripId` is null and the dedup is keyed on
+   * bus, stop, direction and day. The outbound leg stands in for the morning
+   * pickup run and the inbound leg for the evening drop, which is what a parent
+   * watching a demo would expect to be notified about.
+   */
+  void evaluateGeofence({
+    busId,
+    position: { lat: position.lat, lng: position.lng },
+    direction: entry.state.direction === 1 ? Direction.PICKUP : Direction.DROPOFF,
+    tripId: null,
+    stops: path.stops,
+  });
 
   if (at - entry.lastPersistAt < PERSIST_EVERY_MS) return;
   entry.lastPersistAt = at;

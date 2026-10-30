@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Navika — Project One-Pager</title>
+<title>BusGuard — Project One-Pager</title>
 <style>
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -47,7 +47,8 @@
     padding: 6px 10px 7px 10px;
     display: flex; align-items: center; gap: 10px;
   }
-  .logo { font-size: 19pt; font-weight: 800; letter-spacing: -0.6px; line-height: 1; }
+  .logo { display: flex; align-items: center; gap: 7px; font-size: 19pt; font-weight: 800; letter-spacing: -0.6px; line-height: 1; }
+  .logo img { height: 26px; width: 26px; border-radius: 7px; background: #fff; padding: 2px; box-sizing: border-box; }
   .logo span { color: var(--green2); }
   .tagline { font-size: 7.6pt; font-weight: 600; color: #E2E8F0; margin-top: 2.5px; line-height: 1.22; }
   .tagline em { color: var(--green2); font-style: normal; }
@@ -180,7 +181,7 @@
   <!-- ======================= HEADER ======================= -->
   <header>
     <div>
-      <div class="logo">NAVI<span>KA</span></div>
+      <div class="logo"><img src="logo.png" alt="" />Bus<span>Guard</span></div>
       <div class="tagline">Student-aware school &amp; college bus tracking — <em>for India, on a phone, with zero hardware.</em></div>
       <div class="sub">Solo-built full-stack product · a dot on a map is not an answer — a child on a bus is</div>
     </div>
@@ -207,7 +208,7 @@
       <div class="sec">
         <div class="sech"><span class="num">01</span><h2>Kis Cheez Ke Liye — The Problem</h2><span class="rule"></span></div>
         <div class="quote">At 7:40 in the morning a parent does not ask <u>"where is the bus?"</u> They ask <u>"is my child on it?"</u></div>
-        <div class="subq">Navika closes the gap between <b>where a vehicle is</b> and <b>what happened to a person</b> — which student is on which bus, which stop they board at, whether they have stepped out of the house yet, and whether they actually got picked up.</div>
+        <div class="subq">BusGuard closes the gap between <b>where a vehicle is</b> and <b>what happened to a person</b> — which student is on which bus, which stop they board at, whether they have stepped out of the house yet, and whether they actually got picked up.</div>
         <div class="blind"><div class="k">1</div><div><h4>The hardware gate</h4><p>An affordable Indian school buys a ₹3,000–8,000 GPS black box per bus, RFID cards, a SIM and an annual contract — and still receives a dot on a map. Cost scales per vehicle, so small colleges are priced out entirely.</p></div></div>
         <div class="blind"><div class="k">2</div><div><h4>Nobody closes the loop</h4><p>The bus arrives, the driver is late, the child is left standing. No product makes the parent and the driver <b>agree on what happened</b>. The map is a one-way broadcast with no confirmation channel.</p></div></div>
         <div class="blind"><div class="k">3</div><div><h4>Identity is lost</h4><p>A bus is tracked, a child is not. "Bus 12 is on time" never becomes "Aarav got home", and attendance becomes a register the driver ticks from memory after the route ends.</p></div></div>
@@ -242,7 +243,7 @@
       <!-- 04 -->
       <div class="sec">
         <div class="sech"><span class="num">04</span><h2>Hum Kaise Alag Hain</h2><span class="rule"></span><span class="note">Already in the code, not promised</span></div>
-        <div class="d-item"><div class="k">1</div><div><h4>Zero hardware — the phone is the tracker</h4><p>No black box, no RFID, no SIM, no installer on campus. Per-bus cost is ₹0, so a 20-bus college onboards in a day, not a quarter. This is the single biggest reason incumbents cannot reach Navika's segment.</p></div></div>
+        <div class="d-item"><div class="k">1</div><div><h4>Zero hardware — the phone is the tracker</h4><p>No black box, no RFID, no SIM, no installer on campus. Per-bus cost is ₹0, so a 20-bus college onboards in a day, not a quarter. This is the single biggest reason incumbents cannot reach BusGuard's segment.</p></div></div>
         <div class="d-item"><div class="k">2</div><div><h4>The child is the entity, not the bus</h4><p>Student → bus → stop → route → trip, and alerts resolve through <code>ParentChild</code> to that specific child's guardians. "Bus 12 is on time" becomes "Aarav got home." Fleet tools structurally cannot do this.</p></div></div>
         <div class="d-item"><div class="k">3</div><div><h4>The loop actually closes</h4><p>Parent presses "I'm waiting" → the driver's checklist shows "3 waiting" before he arrives → he marks picked or missed. That two-way handshake is the proof a map can never give, and it is built end to end.</p></div></div>
         <div class="d-item"><div class="k">4</div><div><h4>GPS is treated as untrusted input</h4><p>Accuracy ceiling, clock-skew window, a 160 km/h teleport guard and a freshness tone so a dead signal never looks like a parked bus. Most trackers draw the glitch and lose the parent's trust in week one.</p></div></div>
@@ -307,7 +308,7 @@
           <p><b>Not built yet, and it matters:</b> CSV / Excel export of attendance and reports · an offline-first queue so a driver in a dead zone does not lose pick-ups · the driver-facing simulator · invite-vetted parent self-signup instead of open registration · billing and per-school tenancy · a hardware fallback for buses where no driver carries a phone · offline map tiles for poor-network corridors.</p>
         </div>
         <div class="deploy">
-          <b>Why not Vercel.</b> Socket.IO needs one long-lived connection to fan positions out to watching parents, and serverless functions are torn down between requests. Navika therefore runs on a persistent Node host behind a custom <code>server.ts</code> that hands the handshake to engine.io before Next.js sees the request.
+          <b>Why not Vercel.</b> Socket.IO needs one long-lived connection to fan positions out to watching parents, and serverless functions are torn down between requests. BusGuard therefore runs on a persistent Node host behind a custom <code>server.ts</code> that hands the handshake to engine.io before Next.js sees the request.
         </div>
       </div>
 
@@ -329,7 +330,7 @@
           </tr>
         </table>
         <div class="note-box">
-          <b>How to see it working today.</b> <code>npm run dev</code> serves the app on <code>localhost:3000</code> with Socket.IO attached. Seeded demo logins, all with the password <code>navika123</code>: <code>admin@navika.test</code>, <code>driver1@navika.test</code>, <code>parent1@navika.test</code> and <code>aarav.sharma0@student.navika.test</code> — one of each role, so the four dashboards can be compared side by side.
+          <b>How to see it working today.</b> <code>npm run dev</code> serves the app on <code>localhost:3000</code> with Socket.IO attached. Seeded demo logins, all with the password <code>busguard123</code>: <code>admin@busguard.test</code>, <code>driver1@busguard.test</code>, <code>parent1@busguard.test</code> and <code>aarav.sharma0@student.busguard.test</code> — one of each role, so the four dashboards can be compared side by side.
         </div>
       </div>
 
@@ -337,7 +338,7 @@
   </div>
 
   <footer>
-    <span><b>Navika</b> — student-aware smart school &amp; college bus management and tracking</span>
+    <span><b>BusGuard</b> — student-aware smart school &amp; college bus management and tracking</span>
     <span>Status: <b>83% of roadmap</b> · 147/147 tests · typecheck + lint clean · 30 Sep 2026</span>
   </footer>
 

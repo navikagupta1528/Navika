@@ -265,6 +265,6 @@ export async function getTripRosterExportRows(tripId: string) {
     trip,
     rows,
     columns: TRIP_ROSTER_COLUMNS,
-    filename: `navika-manifest-${trip.bus.busNumber}-${trip.date.toISOString().slice(0, 10)}-${trip.direction.toLowerCase()}.csv`,
+    filename: `busguard-manifest-${trip.bus.busNumber}-${trip.date.toISOString().slice(0, 10)}-${trip.direction.toLowerCase()}.csv`,
   };
 }

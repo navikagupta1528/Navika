@@ -144,7 +144,7 @@ async function fetchOsrm(path: string): Promise<OsrmRoute | null> {
         // Required by the OSRM demo instance. A browser will not let us
         // override User-Agent, but these two are settable and are what the
         // service actually reads for identification.
-        "X-Requested-With": "navika",
+        "X-Requested-With": "busguard",
         Accept: "application/json",
       },
       // Next caches fetch results by default, but this URL is not in the

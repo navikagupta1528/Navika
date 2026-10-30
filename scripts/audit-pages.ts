@@ -66,10 +66,10 @@ const prisma = new PrismaClient({
 });
 
 const ROLES = [
-  { name: "ADMIN", email: "admin@navika.test" },
-  { name: "DRIVER", email: "driver1@navika.test" },
-  { name: "PARENT", email: "parent1@navika.test" },
-  { name: "STUDENT", email: "aarav.sharma0@student.navika.test" },
+  { name: "ADMIN", email: "admin@busguard.test" },
+  { name: "DRIVER", email: "driver1@busguard.test" },
+  { name: "PARENT", email: "parent1@busguard.test" },
+  { name: "STUDENT", email: "aarav.sharma0@student.busguard.test" },
 ] as const;
 
 /** Routes each role is expected to be able to open. */
@@ -105,8 +105,15 @@ const ROUTES: Record<string, string[]> = {
   STUDENT: ["/student", "/notifications", "/install"],
 };
 
-/** Public pages, checked once with no session at all. */
-const PUBLIC = ["/login", "/register"];
+/**
+ * Public pages, checked once with no session at all.
+ *
+ * `/` is the landing page. It is public for an anonymous visitor but redirects a
+ * signed-in one, so it is audited in the anonymous pass - which is the pass whose
+ * console errors, contrast and CLS actually describe a stranger's first
+ * impression, and the one the design of this page is aimed at.
+ */
+const PUBLIC = ["/", "/login", "/register"];
 
 /**
  * The HMR websocket id changes on every reconnect, so it has to be normalised out
@@ -125,15 +132,53 @@ type Finding = {
 };
 
 const findings: Finding[] = [];
+/**
+ * Console warnings the app prints on purpose.
+ *
+ * Kept separate from `findings` and reported in their own section: the advisory
+ * stays visible on every run, it just does not decide the exit code.
+ */
+const advisories: Finding[] = [];
 const visited: { role: string; route: string; status: number | null; ms: number }[] = [];
 
-function add(route: string, role: string, kind: string, rawDetail: string) {
+/**
+ * Console warnings that are the feature rather than a defect.
+ *
+ * Failing on any console warning is the right default — in production a warning
+ * is nearly always a React key warning or a hydration mismatch wearing a
+ * different hat, and a gate that cannot fail is not a gate.
+ *
+ * The map's tile notice is a real exception rather than a convenient one. It is
+ * *supposed* to print once per page load whenever a production build is still
+ * pointed at OpenStreetMap's public server, which is exactly the state this
+ * audit runs in: `NEXT_PUBLIC_MAP_TILE_URL` is unset because a tile provider is a
+ * deployment decision, and it is inlined into the bundle at build time, so it
+ * cannot be supplied at audit time to make the message go away. Failing on it
+ * would leave the audit red on a clean checkout with nothing actually wrong, and
+ * six copies of it would bury the next real warning.
+ *
+ * Matched on a distinctive phrase so the whole warning has to be present, and
+ * listed by name so the next deliberate warning has to be added here deliberately.
+ */
+const DELIBERATE_WARNINGS = ["Map tiles are still on OpenStreetMap's public server"];
+
+function record(into: Finding[], route: string, role: string, kind: string, rawDetail: string) {
   const detail = normalise(rawDetail);
   // One identical finding per route per kind: a component in a list reports the
   // same thing forty times and the repetition hides the other thirty-nine.
-  if (findings.some((f) => f.route === route && f.role === role && f.kind === kind && f.detail === detail))
+  if (into.some((f) => f.route === route && f.role === role && f.kind === kind && f.detail === detail))
     return;
-  findings.push({ route, role, kind, detail });
+  into.push({ route, role, kind, detail });
+}
+
+/** A problem. Anything recorded here sets a non-zero exit code. */
+function add(route: string, role: string, kind: string, rawDetail: string) {
+  record(findings, route, role, kind, rawDetail);
+}
+
+/** A known deliberate advisory. Shown in the report, never a failure. */
+function noteAdvisory(route: string, role: string, kind: string, rawDetail: string) {
+  record(advisories, route, role, kind, rawDetail);
 }
 
 /**
@@ -378,6 +423,11 @@ async function visit(page: Page, route: string, role: string) {
   }
   for (const e of consoleWarnings) {
     // React's own key warnings and act() advice are worth seeing, not hiding.
+    // The tile notice is the one deliberate exception — see DELIBERATE_WARNINGS.
+    if (DELIBERATE_WARNINGS.some((phrase) => e.includes(phrase))) {
+      noteAdvisory(route, role, "advisory", e);
+      continue;
+    }
     add(route, role, "console-warning", e);
   }
   for (const e of failedRequests) add(route, role, "request-failed", e);
@@ -477,7 +527,7 @@ async function main() {
       prisma.studentProfile.findFirst({ select: { id: true } }),
     ]);
 
-    await signIn(page, "admin@navika.test");
+    await signIn(page, "admin@busguard.test");
     const dynamic: [string, string | undefined][] = [
       ["/admin/buses/", bus?.id],
       ["/admin/drivers/", driver?.id],
@@ -532,6 +582,26 @@ async function main() {
   console.log("");
   console.log("Slowest routes (average ms, headless, so generous):");
   for (const s of slowest) console.log(`  ${String(s.avg).padStart(6)}  ${s.route}`);
+
+  if (advisories.length > 0) {
+    const advisoryKinds = new Map<string, Finding[]>();
+    for (const f of advisories) {
+      const k = advisoryKinds.get(f.kind) ?? [];
+      k.push(f);
+      advisoryKinds.set(f.kind, k);
+    }
+    console.log("");
+    console.log(
+      `${advisories.length} deliberate advisory, reported and not failed:`,
+    );
+    for (const [kind, group] of advisoryKinds) {
+      console.log(`  ${kind}  (${group.length})`);
+      for (const f of group) {
+        console.log(`    ${f.role.padEnd(9)} ${f.route}`);
+        console.log(`      ${f.detail}`);
+      }
+    }
+  }
 
   if (findings.length === 0) {
     console.log("");

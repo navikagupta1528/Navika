@@ -80,30 +80,42 @@ export default async function TripsPage({
       <PageHeader
         title="Trips"
         description="One run of a bus in one direction on one day. Starting a trip creates its attendance sheet."
+        icon="trips"
       />
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Scheduled" value={counts.SCHEDULED} tone="blue" />
+          <StatTile
+            label="Scheduled"
+            value={counts.SCHEDULED}
+            tone="blue"
+            icon="clock"
+          />
           <StatTile
             label="On the road"
             value={counts.ONGOING}
             tone={counts.ONGOING > 0 ? "emerald" : "slate"}
+            icon="navigate"
           />
-          <StatTile label="Completed" value={counts.COMPLETED} />
+          <StatTile label="Completed" value={counts.COMPLETED} icon="check" />
           <StatTile
             label="Cancelled"
             value={counts.CANCELLED}
             tone={counts.CANCELLED > 0 ? "red" : "slate"}
+            icon="close"
           />
         </div>
 
         <Card>
-          <CardTitle hint="One trip per bus per direction per day, enforced by the database.">
+          <CardTitle
+            icon="trips"
+            hint="One trip per bus per direction per day, enforced by the database."
+          >
             Schedule a trip
           </CardTitle>
           {scheduled.length === 0 ? (
             <EmptyState
+              icon="bus"
               title="No bus is ready to run"
               description="A bus needs to be active and have a route with at least one stop. Fix that on the Fleet and Routes screens first."
               action={
@@ -114,6 +126,7 @@ export default async function TripsPage({
             />
           ) : activeDrivers.length === 0 ? (
             <EmptyState
+              icon="drivers"
               title="No active driver"
               description="Trips need a driver. Create one on the Drivers screen."
               action={
@@ -188,6 +201,7 @@ export default async function TripsPage({
 
           {trips.length === 0 ? (
             <EmptyState
+              icon="trips"
               title="No trips on this date"
               description="Schedule one above, or pick a different day. Bus services normally run a pickup trip and a drop-off trip per working day."
             />

@@ -19,7 +19,7 @@
  * ----------------
  * Throttle on the submitted email and an attacker who does not have a password
  * still needs nothing else: submit wrong passwords for
- * `aarav.sharma0@student.navika.test` a few times, and that student cannot log
+ * `aarav.sharma0@student.busguard.test` a few times, and that student cannot log
  * in again for as long as the lockout lasts. The limiter that exists to stop an
  * attacker is now the thing the attacker uses. No credentials, no access, no
  * trace.

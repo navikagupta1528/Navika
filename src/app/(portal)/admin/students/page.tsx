@@ -48,24 +48,37 @@ export default async function StudentsPage({
       <PageHeader
         title="Students"
         description="Who rides which bus, from which stop, in which direction."
+        icon="students"
       />
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Students" value={counts.total} tone="violet" />
+          <StatTile
+            label="Students"
+            value={counts.total}
+            tone="violet"
+            icon="students"
+          />
           <StatTile
             label="With an assignment"
             value={counts.assigned}
             sub={`${counts.unassigned} unassigned`}
             tone={counts.unassigned > 0 ? "amber" : "emerald"}
+            icon="bus"
           />
           <StatTile
             label="No parent linked"
             value={counts.noParent}
             sub={counts.noParent > 0 ? "cannot get alerts" : "all linked"}
             tone={counts.noParent > 0 ? "amber" : "emerald"}
+            icon="users"
           />
-          <StatTile label="Assignments" value={counts.assignments} sub="active enrolments" />
+          <StatTile
+            label="Assignments"
+            value={counts.assignments}
+            sub="active enrolments"
+            icon="pin"
+          />
         </div>
 
         {counts.noParent > 0 ? (
@@ -149,6 +162,7 @@ export default async function StudentsPage({
 
           {students.length === 0 ? (
             <EmptyState
+              icon="students"
               title="No students match"
               description={
                 term

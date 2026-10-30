@@ -284,8 +284,8 @@ describe("safeDownloadFilename", () => {
   it("falls back rather than returning an empty filename", () => {
     // An empty Content-Disposition filename makes some browsers save the file as
     // "download", or refuse the download entirely.
-    expect(safeDownloadFilename("///")).toBe("navika-export.csv");
-    expect(safeDownloadFilename("")).toBe("navika-export.csv");
+    expect(safeDownloadFilename("///")).toBe("busguard-export.csv");
+    expect(safeDownloadFilename("")).toBe("busguard-export.csv");
   });
 
   it("collapses runs of punctuation left behind by stripping", () => {

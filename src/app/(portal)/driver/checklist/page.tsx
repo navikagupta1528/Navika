@@ -6,7 +6,7 @@ import { Role } from "@/generated/prisma/enums";
 import { getRouteGeometry } from "@/lib/osrm";
 import { RouteMap } from "@/components/map/route-map";
 import { ChecklistRowView, type ChecklistRow } from "@/components/tracking/checklist-row";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { Badge, Card, CardTitle, EmptyState, StatTile } from "@/components/ui/primitives";
 import { formatTime } from "@/lib/utils";
 import { formatDistance } from "@/lib/geo";
@@ -56,11 +56,11 @@ export default async function DriverChecklistPage({
     },
   });
 
-  const nav = [
-    { href: "/driver", label: "Today's trip", icon: "🧭", exact: true },
-    { href: "/driver/checklist", label: "Pickup checklist", icon: "☑️" },
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
-    { href: "/install", label: "Install on phone", icon: "📲" },
+  const nav: NavItem[] = [
+    { href: "/driver", label: "Today's trip", icon: "navigate", exact: true },
+    { href: "/driver/checklist", label: "Pickup checklist", icon: "clipboard" },
+    { href: "/notifications", label: "Notifications", icon: "bell" },
+    { href: "/install", label: "Install on phone", icon: "install" },
   ];
 
   const shell = (children: React.ReactNode) => (
@@ -76,8 +76,9 @@ export default async function DriverChecklistPage({
   if (trips.length === 0) {
     return shell(
       <>
-        <PageHeader title="Pickup checklist" />
+        <PageHeader title="Pickup checklist" icon="clipboard" />
         <EmptyState
+          icon="clipboard"
           title="No trip scheduled today"
           description="Attendance can only be recorded against a trip. When the admin schedules a run for you, it appears here."
         />
@@ -138,8 +139,12 @@ export default async function DriverChecklistPage({
   if (!trip) {
     return shell(
       <>
-        <PageHeader title="Pickup checklist" />
-        <EmptyState title="Trip not found" description="That trip no longer exists." />
+        <PageHeader title="Pickup checklist" icon="clipboard" />
+        <EmptyState
+          icon="alert"
+          title="Trip not found"
+          description="That trip no longer exists."
+        />
       </>,
     );
   }
@@ -177,6 +182,7 @@ export default async function DriverChecklistPage({
       <PageHeader
         title={`${trip.bus.busNumber} · ${trip.route.code}`}
         description={`${trip.direction === "PICKUP" ? "Home → college" : "College → home"} · ${rows.length} students on this run`}
+        icon="clipboard"
         action={<Badge tone={trip.status === "ONGOING" ? "emerald" : "slate"}>{trip.status}</Badge>}
       />
 
@@ -200,9 +206,9 @@ export default async function DriverChecklistPage({
 
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-3">
-          <StatTile label="On board" value={picked} sub={`of ${rows.length} expected`} tone="emerald" />
-          <StatTile label="Waiting at stops" value={waiting} sub="marked by students" tone={waiting ? "amber" : "slate"} />
-          <StatTile label="Still to board" value={outstanding} sub="picked or missed" />
+          <StatTile label="On board" value={picked} sub={`of ${rows.length} expected`} tone="emerald" icon="check" />
+          <StatTile label="Waiting at stops" value={waiting} sub="marked by students" tone={waiting ? "amber" : "slate"} icon="users" />
+          <StatTile label="Still to board" value={outstanding} sub="picked or missed" icon="clock" />
         </div>
 
         {trip.status === "SCHEDULED" ? (
@@ -234,6 +240,7 @@ export default async function DriverChecklistPage({
         {byStop.map(({ stop, order, scheduledHHMM, rows: stopRows }) => (
           <Card key={stop.id}>
             <CardTitle
+              icon="pin"
               hint={stop.address ?? undefined}
               action={
                 <span className="flex items-center gap-2 text-xs">

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { scoreFromEvents, type DrivingEventType } from "@/lib/driving";
 
 /**
  * Attendance aggregates for the reports screen.
@@ -180,4 +181,58 @@ export async function getAttendanceReport(
     chronic,
     daily: [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
   };
+}
+
+export type DriverSafetyScore = {
+  driverId: string;
+  name: string;
+  score: number;
+  total: number;
+  counts: Record<DrivingEventType, number>;
+};
+
+/**
+ * Each driver's safety score over a date range, worst first.
+ *
+ * The events are aggregated in the database and scored here, so the score is
+ * computed by the same pure function that is unit tested — the query only
+ * decides *which* events belong to a driver, never what they are worth.
+ *
+ * Sorted worst-first because that is the order a manager works a list in: the
+ * driver who needs a conversation is at the top, and a clean driver is not
+ * news.
+ */
+export async function getDriverSafetyScores(
+  from: string,
+  to: string,
+): Promise<DriverSafetyScore[]> {
+  const { gte, lt } = range(from, to);
+
+  const events = await prisma.drivingEvent.findMany({
+    where: { at: { gte, lt }, driverId: { not: null } },
+    select: {
+      driverId: true,
+      type: true,
+      driver: { select: { name: true } },
+    },
+  });
+
+  const byDriver = new Map<string, { name: string; types: DrivingEventType[] }>();
+  for (const event of events) {
+    if (!event.driverId) continue;
+    const entry = byDriver.get(event.driverId) ?? {
+      name: event.driver?.name ?? "Unknown driver",
+      types: [],
+    };
+    entry.types.push(event.type);
+    byDriver.set(event.driverId, entry);
+  }
+
+  return [...byDriver.entries()]
+    .map(([driverId, { name, types }]) => ({
+      driverId,
+      name,
+      ...scoreFromEvents(types.map((type) => ({ type, magnitudeKph: 0, at: 0 }))),
+    }))
+    .sort((a, b) => a.score - b.score);
 }

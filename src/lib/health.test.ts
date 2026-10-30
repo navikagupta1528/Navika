@@ -53,7 +53,7 @@ describe("classifyDbError", () => {
 
   it("never echoes a connection string back to the caller", () => {
     const withSecret = new Error(
-      "connect ECONNREFUSED for postgresql://navika:hunter2@db.internal:5432/navika",
+      "connect ECONNREFUSED for postgresql://busguard:hunter2@db.internal:5432/busguard",
     );
     expect(classifyDbError(withSecret, true)).toBe("unreachable");
     // The point of the assertion is the label: only one of three short strings

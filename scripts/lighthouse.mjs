@@ -10,9 +10,13 @@
  *   npm run lighthouse              # score, report, exit non-zero on a floor miss
  *   npm run lighthouse -- --open    # also dump the HTML report path
  *
- * It scores `/login` and `/register`, the only pages reachable without a
+ * It scores `/`, `/login` and `/register` - the only pages reachable without a
  * session. An authenticated page would need a login handshake inside the run,
  * which makes the number depend on the seed rather than on the code.
+ *
+ * `/` is scored anonymously, which is the visitor it exists for: the proxy
+ * redirects a caller who already has a cookie, so Lighthouse - which carries
+ * none - always sees the landing page itself.
  *
  * The floors are set one point below what the app currently achieves, so this
  * catches a regression instead of blocking an improvement. Tighten them when a
@@ -32,14 +36,19 @@ const BASE = process.env.LIGHTHOUSE_URL ?? "http://localhost:3010";
 /**
  * Every page reachable without a session.
  *
- * Both of these are scored, not just the first one. `/login` and `/register`
+ * All of these are scored, not just the first one. `/login` and `/register`
  * share a layout but not their markup, and `/register` was sitting at 96
  * accessibility while `/login` read 100 — a contrast failure on a line of
  * footer copy, in a layout both pages use. Scoring one page and declaring the
  * work done would have left it there indefinitely, because the passing page
  * says nothing about the failing one.
+ *
+ * `/` shares nothing with the auth pages: it is a full marketing page with its
+ * own header, footer, gradient band and illustration, and it is the first thing
+ * a stranger loads. It is listed first because `assertServerUp` probes the head
+ * of this list.
  */
-const PATHS_UNDER_TEST = ["/login", "/register"];
+const PATHS_UNDER_TEST = ["/", "/login", "/register"];
 
 /**
  * Category -> minimum acceptable score, 0..1.

@@ -5,6 +5,7 @@ import {
   IMPLAUSIBLE_SPEED_KPH,
   MAX_ACCEPTED_ACCURACY_M,
   STALE_AFTER_MS,
+  classifyReportAge,
   describeFreshness,
   fixFromPosition,
   freshnessFromAge,
@@ -251,5 +252,34 @@ describe("describeFreshness", () => {
     expect(result.tone).toBe("slate");
     expect(result.label).toBe("No recent signal");
     expect(result.detail).toMatch(/last position/);
+  });
+});
+
+describe("classifyReportAge", () => {
+  it("accepts a report with no timestamp", () => {
+    expect(classifyReportAge(null, NOW)).toBe("fresh");
+    expect(classifyReportAge(undefined, NOW)).toBe("fresh");
+  });
+
+  it("accepts a report from just now", () => {
+    expect(classifyReportAge(NOW, NOW)).toBe("fresh");
+    expect(classifyReportAge(NOW - CLOCK_SKEW_PAST_MS, NOW)).toBe("fresh");
+  });
+
+  it("rejects a replayed report from a tunnel", () => {
+    expect(classifyReportAge(NOW - CLOCK_SKEW_PAST_MS - 1, NOW)).toBe("stale");
+    expect(classifyReportAge(NOW - 5 * 60_000, NOW)).toBe("stale");
+  });
+
+  it("rejects a report dated too far in the future", () => {
+    expect(classifyReportAge(NOW + CLOCK_SKEW_FUTURE_MS + 1, NOW)).toBe("future");
+  });
+
+  it("tolerates a little clock skew either way", () => {
+    expect(classifyReportAge(NOW + CLOCK_SKEW_FUTURE_MS, NOW)).toBe("fresh");
+  });
+
+  it("is not fooled by NaN", () => {
+    expect(classifyReportAge(Number.NaN, NOW)).toBe("fresh");
   });
 });

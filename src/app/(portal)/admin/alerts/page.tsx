@@ -76,6 +76,7 @@ export default async function AlertsPage({
       <PageHeader
         title="Alerts"
         description="Emergencies, breakdowns and delays raised from the field. Nothing is deleted — every alert keeps its history."
+        icon="alerts"
       />
 
       <div className="space-y-6">
@@ -85,17 +86,25 @@ export default async function AlertsPage({
             value={statusCounts.OPEN}
             sub={statusCounts.OPEN > 0 ? "not yet acknowledged" : "all clear"}
             tone={statusCounts.OPEN > 0 ? "red" : "emerald"}
+            icon="alert"
           />
           <StatTile
             label="Being handled"
             value={statusCounts.ACKNOWLEDGED}
             tone={statusCounts.ACKNOWLEDGED > 0 ? "amber" : "slate"}
+            icon="clock"
           />
-          <StatTile label="Resolved" value={statusCounts.RESOLVED} tone="emerald" />
+          <StatTile
+            label="Resolved"
+            value={statusCounts.RESOLVED}
+            tone="emerald"
+            icon="check"
+          />
         </div>
 
         <Card>
           <CardTitle
+            icon="alerts"
             hint={describeWindow(page)}
             action={
               <div className="flex flex-wrap gap-1.5">
@@ -120,6 +129,7 @@ export default async function AlertsPage({
 
           {alerts.length === 0 ? (
             <EmptyState
+              icon="alerts"
               title={status ? `No ${status.toLowerCase()} alerts` : "No alerts raised"}
               description={
                 status

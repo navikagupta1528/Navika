@@ -38,6 +38,7 @@ export default async function DriversPage() {
       <PageHeader
         title="Drivers"
         description="Driver accounts, licences and which bus each one is on."
+        icon="drivers"
         action={
           <Link href="/admin/drivers/new" className="btn-primary">
             New driver
@@ -47,22 +48,30 @@ export default async function DriversPage() {
 
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Active drivers" value={active.length} tone="blue" />
+          <StatTile
+            label="Active drivers"
+            value={active.length}
+            tone="blue"
+            icon="users"
+          />
           <StatTile
             label="Unassigned"
             value={unassigned.length}
             sub={unassigned.length > 0 ? "no bus yet" : "all have a bus"}
             tone={unassigned.length > 0 ? "amber" : "emerald"}
+            icon="bus"
           />
           <StatTile
             label="Licence expired"
             value={expiring.length}
             tone={expiring.length > 0 ? "red" : "emerald"}
+            icon="idCard"
           />
           <StatTile
             label="Expiring in 60 days"
             value={soon.length}
             tone={soon.length > 0 ? "amber" : "slate"}
+            icon="clock"
           />
         </div>
 
@@ -81,7 +90,10 @@ export default async function DriversPage() {
         ) : null}
 
         <Card>
-          <CardTitle hint={`${drivers.length} driver account${drivers.length === 1 ? "" : "s"}`}>
+          <CardTitle
+            icon="drivers"
+            hint={`${drivers.length} driver account${drivers.length === 1 ? "" : "s"}`}
+          >
             All drivers
           </CardTitle>
 

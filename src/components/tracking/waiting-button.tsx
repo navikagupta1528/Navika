@@ -3,7 +3,7 @@
 /**
  * "I'm waiting" — the one button that makes this student-aware.
  *
- * Everything else in Navika is about where the bus is. This is about the
+ * Everything else in BusGuard is about where the bus is. This is about the
  * student: they are standing at a stop, and the driver needs to know before
  * turning onto that road, not after blowing past them.
  */

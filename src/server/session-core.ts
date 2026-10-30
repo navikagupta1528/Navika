@@ -12,7 +12,7 @@
  */
 import { jwtVerify, SignJWT } from "jose";
 
-export const SESSION_COOKIE = "navika_session";
+export const SESSION_COOKIE = "busguard_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8; // one working day
 
 export type SessionRole = "STUDENT" | "PARENT" | "DRIVER" | "ADMIN";

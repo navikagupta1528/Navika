@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { IconBadge } from "@/components/ui/primitives";
+
 /**
  * 404 inside the portal.
  *
@@ -18,7 +20,16 @@ import Link from "next/link";
 export default function PortalNotFound() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="w-full max-w-md text-center">
+      <div className="busguard-rise w-full max-w-md text-center">
+        <div className="mb-4 flex justify-center">
+          {/*
+            A map glyph rather than an error glyph. A 404 is not a failure - the
+            link simply leads nowhere - and reusing the error boundary's red
+            triangle would say "something broke" about a route that behaved
+            exactly as it should. It is decorative; the heading carries it.
+          */}
+          <IconBadge name="map" tone="slate" size="lg" />
+        </div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           Not found
         </p>

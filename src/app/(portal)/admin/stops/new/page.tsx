@@ -11,6 +11,7 @@ export default function NewStopPage() {
       <PageHeader
         title="New stop"
         description="A pickup point students can be assigned to."
+        icon="stops"
         action={
           <Link href="/admin/stops" className="btn-secondary">
             Back to stops
@@ -20,7 +21,11 @@ export default function NewStopPage() {
 
       <div className="max-w-3xl">
         <Card>
-          <CardTitle hint="Latitude and longitude decide where the map draws it.">
+          <CardTitle
+            icon="stops"
+            size="md"
+            hint="Latitude and longitude decide where the map draws it."
+          >
             Stop details
           </CardTitle>
           <EntityForm

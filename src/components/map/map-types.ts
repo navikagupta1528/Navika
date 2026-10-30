@@ -78,6 +78,14 @@ export type RouteMapProps = {
   onReorder?: (orderedIds: string[]) => void | Promise<void>;
   /** Shown when there is nothing at all to draw. */
   emptyMessage?: string;
+  /**
+   * A point to pulse a sonar ring around — the stop a viewer is waiting at.
+   *
+   * Optional because a viewer watching the whole route (an admin, or a parent
+   * with no single stop) has no point that is personally theirs, and a pulse
+   * at an arbitrary centre would be decoration rather than a signal.
+   */
+  pulseAt?: { lat: number; lng: number } | null;
 };
 
 /** Pune, where the seed data lives. A sane default view for this system. */

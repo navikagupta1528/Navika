@@ -23,6 +23,7 @@ import {
 } from "@/lib/geo";
 import { DEFAULT_VIEWPORT, type MapStop, type RouteMapProps } from "./map-types";
 import { classifyMapError, mapFailureMessage, type MapFailure } from "@/lib/map-errors";
+import { mapTileNotice, resolveMapTileUrl } from "@/lib/map-tiles";
 import { mapWorkerUrl } from "@/lib/map-worker";
 
 /**
@@ -40,9 +41,31 @@ import { mapWorkerUrl } from "@/lib/map-worker";
  * Nothing accumulates, and no marker holds state React does not know about.
  */
 
-const SOURCE_ID = "navika-route";
-const LINE_LAYER_ID = "navika-route-line";
-const LINE_CASING_LAYER_ID = "navika-route-line-casing";
+const SOURCE_ID = "busguard-route";
+const LINE_LAYER_ID = "busguard-route-line";
+const LINE_CASING_LAYER_ID = "busguard-route-line-casing";
+
+/*
+ * The pulsing arrival ring.
+ *
+ * A sonar pulse on the stop a viewer is waiting at — the one point on the map
+ * that is personally theirs. Drawn as a MapLibre circle layer whose radius and
+ * opacity are driven by a `requestAnimationFrame` loop, because a CSS animation
+ * cannot reach inside the WebGL canvas and a static circle would be a thing to
+ * look at rather than a thing that says "the bus is coming".
+ *
+ * Two expanding rings, a beat apart, so the eye reads continuous motion rather
+ * than a single pulse that occasionally blinks. The radius and opacity are set
+ * directly on the layer's paint properties; rebuilding the source every frame
+ * would be a per-frame allocation for no gain.
+ */
+const PULSE_SOURCE_ID = "busguard-pulse";
+const PULSE_LAYER_A_ID = "busguard-pulse-ring-a";
+const PULSE_LAYER_B_ID = "busguard-pulse-ring-b";
+const PULSE_BASE_RADIUS_M = 60;
+const PULSE_EXPANSION_M = 220;
+const PULSE_PERIOD_MS = 2400;
+const PULSE_SECONDARY_OFFSET = 0.5;
 
 /*
  * Point MapLibre at a worker that actually loads.
@@ -71,19 +94,30 @@ const LINE_CASING_LAYER_ID = "navika-route-line-casing";
 setWorkerUrl(mapWorkerUrl(process.env.NODE_ENV !== "production"));
 
 /**
- * OpenStreetMap raster tiles, as an inline style.
+ * Raster tiles, from a private provider when one is configured, otherwise OSM.
  *
  * Inline rather than fetching somebody's hosted style document, so there is no
  * runtime dependency on a URL that can change shape without warning and break
  * the route line layer silently.
  *
- * OSM's public tile server is explicitly meant to serve projects at this scale.
- * It is not a production dependency: point `NEXT_PUBLIC_MAP_TILE_URL` at a
- * hosted provider before deploying for real.
+ * The choice of URL and the production warning both live in `@/lib/map-tiles`,
+ * so the decision is unit-tested and the reason OSMs server is a development
+ * default rather than a production one is written down once.
  */
-const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const OSM_ATTRIBUTION =
   '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+/*
+ * Warn once, in production only, when the build is still pointed at OSM's public
+ * server. Module scope so it prints once per page load rather than on every map
+ * mount, and `console.warn` rather than a thrown error so a misconfigured deploy
+ * still shows a map.
+ */
+const tileNotice = mapTileNotice(
+  process.env.NEXT_PUBLIC_MAP_TILE_URL,
+  process.env.NODE_ENV === "production",
+);
+if (tileNotice) console.warn(tileNotice);
 
 function buildStyle(tileUrl: string, attribution: string): StyleSpecification {
   return {
@@ -145,6 +179,7 @@ export default function MapCanvas({
   onStopClick,
   onReorder,
   emptyMessage,
+  pulseAt = null,
 }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -264,7 +299,7 @@ export default function MapCanvas({
     const stopMarkerMap = stopMarkers.current;
     const vehicleMarkerMap = vehicleMarkers.current;
 
-    const tileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? DEFAULT_TILE_URL;
+    const tileUrl = resolveMapTileUrl(process.env.NEXT_PUBLIC_MAP_TILE_URL);
 
     let map: MapLibreMap;
     try {
@@ -426,6 +461,91 @@ export default function MapCanvas({
     });
   }, [line, ready]);
 
+  // --- Pulsing arrival ring ----------------------------------------------
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !pulseAt) return;
+
+    const data: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: toLngLat(pulseAt) },
+        },
+      ],
+    };
+
+    const existing = map.getSource(PULSE_SOURCE_ID) as GeoJSONSource | undefined;
+    if (existing) {
+      existing.setData(data);
+    } else {
+      map.addSource(PULSE_SOURCE_ID, { type: "geojson", data });
+      map.addLayer({
+        id: PULSE_LAYER_A_ID,
+        type: "circle",
+        source: PULSE_SOURCE_ID,
+        paint: {
+          "circle-radius": PULSE_BASE_RADIUS_M,
+          "circle-color": "#1d4ed8",
+          "circle-opacity": 0.55,
+        },
+      });
+      map.addLayer({
+        id: PULSE_LAYER_B_ID,
+        type: "circle",
+        source: PULSE_SOURCE_ID,
+        paint: {
+          "circle-radius": PULSE_BASE_RADIUS_M,
+          "circle-color": "#1d4ed8",
+          "circle-opacity": 0.55,
+        },
+      });
+    }
+
+    let raf = 0;
+    const startedAt = performance.now();
+
+    /**
+     * Two rings on the same source, half a period apart.
+     *
+     * Each ring expands and fades over one period; the second is offset by half
+     * a period, so at any instant one ring is near its widest and the other is
+     * near its narrowest. The eye reads that as continuous outward motion rather
+     * than a single pulse that blinks off and restarts.
+     */
+    const tick = (now: number) => {
+      const elapsed = (now - startedAt) % PULSE_PERIOD_MS;
+      const phase = elapsed / PULSE_PERIOD_MS;
+
+      map.setPaintProperty(
+        PULSE_LAYER_A_ID,
+        "circle-radius",
+        PULSE_BASE_RADIUS_M + PULSE_EXPANSION_M * phase,
+      );
+      map.setPaintProperty(PULSE_LAYER_A_ID, "circle-opacity", 0.55 * (1 - phase));
+
+      const phaseB = (phase + PULSE_SECONDARY_OFFSET) % 1;
+      map.setPaintProperty(
+        PULSE_LAYER_B_ID,
+        "circle-radius",
+        PULSE_BASE_RADIUS_M + PULSE_EXPANSION_M * phaseB,
+      );
+      map.setPaintProperty(PULSE_LAYER_B_ID, "circle-opacity", 0.55 * (1 - phaseB));
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+    // `pulseAt` is a prop from a Server Component and is referentially stable;
+    // depending on it directly would re-run this effect on every object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
   // --- Stop markers, including drag-to-reorder ----------------------------
 
   useEffect(() => {
@@ -447,7 +567,7 @@ export default function MapCanvas({
 
       const element = document.createElement("button");
       element.type = "button";
-      element.className = `navika-marker navika-marker--stop${muted ? " navika-marker--muted" : ""}`;
+      element.className = `busguard-marker busguard-marker--stop${muted ? " busguard-marker--muted" : ""}`;
       element.setAttribute("aria-label", `Stop ${order}: ${stop.name}`);
       // Safe by construction: `order` is a number and the badge holds no user
       // text. Anything user-supplied goes through `textContent` or escaping.
@@ -518,12 +638,12 @@ export default function MapCanvas({
 
       marker.on("dragstart", () => {
         draggingRef.current = stop.id;
-        element.classList.add("navika-marker--dragging");
+        element.classList.add("busguard-marker--dragging");
       });
 
       marker.on("dragend", () => {
         draggingRef.current = null;
-        element.classList.remove("navika-marker--dragging");
+        element.classList.remove("busguard-marker--dragging");
 
         // Same reason as the click handler: this listener was attached when the
         // marker was created and must not answer from that render's route.
@@ -582,7 +702,7 @@ export default function MapCanvas({
 
       const element = document.createElement("button");
       element.type = "button";
-      element.className = `navika-marker navika-marker--vehicle${stale ? " navika-marker--stale" : ""}`;
+      element.className = `busguard-marker busguard-marker--vehicle${stale ? " busguard-marker--stale" : ""}`;
       element.setAttribute("aria-label", `Bus ${vehicle.label}`);
       element.textContent = vehicle.label;
 
@@ -602,7 +722,7 @@ export default function MapCanvas({
             `<strong>${escapeHtml(live.label)}</strong>` +
               (live.detail ? `<br><span>${escapeHtml(live.detail)}</span>` : "") +
               (href
-                ? `<br><a class="navika-popup-link" href="${escapeHtml(href)}">Open details</a>`
+                ? `<br><a class="busguard-popup-link" href="${escapeHtml(href)}">Open details</a>`
                 : ""),
           )
           .addTo(map);

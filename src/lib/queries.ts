@@ -1,12 +1,46 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { Role, TripDirection, TripStatus } from "@/generated/prisma/enums";
+import { Role, TripDirection, TripStatus, PickupStatus } from "@/generated/prisma/enums";
 
 /**
  * Read helpers shared by the dashboards. Every function that takes a userId
  * scopes its query to that user, so a page cannot accidentally return another
  * student's data.
  */
+
+/**
+ * Today's missed pickups for a set of students, most recently updated first.
+ *
+ * The red card a parent acts on. Scoped by the caller to the students they are
+ * entitled to see — a parent passes their own children's ids, so the query
+ * cannot surface another family's incident, and a student passes only their
+ * own. Unconfirmed rows only: once a guardian has said the child is safe the
+ * card has done its job and should stop taking up the screen.
+ */
+export async function getMissedPickupsToday(
+  studentIds: string[],
+  range: { gte: Date; lt: Date },
+) {
+  if (studentIds.length === 0) return [];
+  return prisma.pickupRecord.findMany({
+    where: {
+      studentId: { in: studentIds },
+      status: PickupStatus.MISSED,
+      safeMarkedAt: null,
+      trip: { date: range },
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      safeMarkedAt: true,
+      tripId: true,
+      stop: { select: { name: true } },
+      trip: { select: { bus: { select: { busNumber: true } } } },
+      student: { select: { user: { select: { name: true } } } },
+    },
+  });
+}
 
 /** The student's active enrolment for the current academic year, if any. */
 export async function getStudentAssignment(studentProfileId: string) {

@@ -95,18 +95,36 @@ function rangeLabel(html: string): string {
  *
  * Reads the markup, not the visible text: the id lives in an `href` attribute.
  *
- * Scoped to `<tbody>` on purpose. The page links to `?edit=<id>` from two places -
- * the results table and the "needs an assignment" shortcut card below it - and
- * matching the whole document mixes the two. That produced a count of 55 for a
- * 25-row page, and made page one and page two look like they overlapped by 40 when
- * the tables were in fact disjoint. A check that mixes two collections will find a
- * bug that is not there, which is how a suite earns a reputation for flakiness.
+ * The question is which `?edit=` links are *rows*, and markup boundaries are the
+ * wrong tool for it. Two things put `?edit=` on this page that are not table rows:
+ *
+ * - **The "Needs an assignment" card** below the table, a `<ul>` of chips, one per
+ *   unassigned student. With probe rows planted it holds nine of them, so a count
+ *   over the whole document reads 34 for a 25-row page.
+ * - **React's flight payload**, inline `<script>` that quotes the tree it is about
+ *   to send, complete with `<tbody>` and `?edit=` strings. Scanning it makes the
+ *   answer depend on how far the response had streamed — the same URL reported 25
+ *   tbodies once and 1 the next time, which is the shape of a flake, not a bug.
+ *
+ * What a row has that neither imposter has is a *pair*: the History link
+ * `/admin/students/<id>` and the edit link `/admin/students?edit=<id>` carrying the
+ * same id. Matching on that pair is exact, and survives the markup changing around
+ * it. Scripts are stripped anyway, so a link quoted twice in the payload cannot
+ * count twice.
  */
 function idsOn(html: string): string[] {
-  const body = /<tbody[\s\S]*?<\/tbody>/.exec(html)?.[0] ?? "";
-  return [...body.matchAll(/href="\/admin\/students\?edit=([a-z0-9]+)"/g)].map(
-    (m) => m[1]!,
+  const markup = html.replace(/<script[^>]*>[\s\S]*?<\/script>/g, "");
+  const edited = new Set(
+    [...markup.matchAll(/href="\/admin\/students\?edit=([a-z0-9]+)"/g)].map(
+      (m) => m[1]!,
+    ),
   );
+  const rows = new Set(
+    [...markup.matchAll(/href="\/admin\/students\/([a-z0-9]+)"/g)].map(
+      (m) => m[1]!,
+    ),
+  );
+  return [...edited].filter((id) => rows.has(id));
 }
 
 /**
@@ -129,7 +147,7 @@ function hrefParam(href: string, key: string): string | null {
 let session: Awaited<ReturnType<typeof login>>;
 
 async function main() {
-  session = await login(BASE, "admin@navika.test", DEMO_PASSWORD);
+  session = await login(BASE, "admin@busguard.test", DEMO_PASSWORD);
   await runChecks();
 }
 
@@ -205,7 +223,7 @@ try {
   for (let n = 0; n < PLANTED; n++) {
     const user = await prisma.user.create({
       data: {
-        email: `pagination-probe-${n}-${process.pid}@navika.test`,
+        email: `pagination-probe-${n}-${process.pid}@busguard.test`,
         name: `Pagination Probe ${n}`,
         passwordHash: "x",
         role: "STUDENT",

@@ -28,6 +28,7 @@ export default async function StopDetailPage({
       <PageHeader
         title={stop.name}
         description={stop.address ?? "No address recorded"}
+        icon="stops"
         action={
           <Link href="/admin/stops" className="btn-secondary">
             Back to stops
@@ -38,7 +39,10 @@ export default async function StopDetailPage({
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           <Card>
-            <CardTitle hint="The pin the driver sees on the pickup sheet.">
+            <CardTitle
+              icon="pin"
+              hint="The pin the driver sees on the pickup sheet."
+            >
               Location
             </CardTitle>
             <RouteMap
@@ -87,6 +91,7 @@ export default async function StopDetailPage({
 
             {stop.enrollments.length === 0 ? (
               <EmptyState
+                icon="students"
                 title="Nobody assigned yet"
                 description="Assign students from the Students screen, picking this stop as their pickup point."
               />
@@ -117,7 +122,7 @@ export default async function StopDetailPage({
 
         <div className="space-y-6">
           <Card>
-            <CardTitle>Details</CardTitle>
+            <CardTitle icon="overview">Details</CardTitle>
             <DetailList
               items={[
                 {
@@ -140,7 +145,9 @@ export default async function StopDetailPage({
           </Card>
 
           <Card>
-            <CardTitle hint="Used by these routes">On routes</CardTitle>
+            <CardTitle icon="routes" hint="Used by these routes">
+              On routes
+            </CardTitle>
             {stop.routes.length === 0 ? (
               <p className="text-sm text-slate-500">
                 Not on any route yet, so no bus will stop here.
@@ -165,8 +172,10 @@ export default async function StopDetailPage({
             )}
           </Card>
 
-          <Card>
-            <CardTitle>Danger zone</CardTitle>
+          <Card accent="red">
+            <CardTitle icon="alert" tone="red">
+              Danger zone
+            </CardTitle>
             <p className="mb-3 text-xs text-slate-500">
               Deactivating keeps past trips readable and stops new enrolments.
               Deleting is only possible once nothing references this stop.

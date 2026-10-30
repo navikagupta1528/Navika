@@ -266,6 +266,26 @@ export async function getBus(id: string) {
   });
 }
 
+/**
+ * The trackers fitted to one bus, newest first.
+ *
+ * Returns the token *hash* and never the token itself: the plaintext is shown
+ * once at creation and is not recoverable afterwards, which is the point.
+ */
+export async function listBusDevices(busId: string) {
+  return prisma.busDevice.findMany({
+    where: { busId },
+    orderBy: [{ revokedAt: "asc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      label: true,
+      lastSeenAt: true,
+      revokedAt: true,
+      createdAt: true,
+    },
+  });
+}
+
 export async function listDrivers() {
   const drivers = await prisma.user.findMany({
     where: { role: "DRIVER" },
@@ -361,7 +381,7 @@ export async function getDriver(id: string) {
  *
  * - **Search.** A term is matched against name, email, enrollment number and
  *   department. It used to be matched against those four joined with spaces, which
- *   also matched a term *spanning* fields - `"aarav sharma@navika"` would hit a
+ *   also matched a term *spanning* fields - `"aarav sharma@busguard"` would hit a
  *   student whose name and email happened to concatenate that way. Nobody types
  *   that on purpose, and it made results depend on field order.
  * - **Counting.** The tiles used to be computed from the fetched array, so they

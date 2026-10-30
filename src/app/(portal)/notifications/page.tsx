@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireRole } from "@/lib/dal";
 import { homeForRole } from "@/lib/dal";
 import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { listNotifications, markAllRead, unreadNotificationCount } from "@/lib/notifications";
 import { getPublicVapidKey, isPushConfigured } from "@/lib/push";
@@ -37,15 +37,16 @@ export default async function NotificationsPage() {
   // can still report how many were new.
   if (unread > 0) await markAllRead(session.userId);
 
-  const nav = [
-    { href: homeForRole(session.role), label: "Dashboard", icon: "⌂" },
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
+  const nav: NavItem[] = [
+    { href: homeForRole(session.role), label: "Dashboard", icon: "overview" },
+    { href: "/notifications", label: "Notifications", icon: "bell" },
   ];
 
   return (
     <PortalShell userName={session.role} roleLabel={session.role} nav={nav}>
       <PageHeader
         title="Notifications"
+        icon="bell"
         description={
           unread > 0
             ? `${unread} new ${unread === 1 ? "message" : "messages"} since you last looked.`

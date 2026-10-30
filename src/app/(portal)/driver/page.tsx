@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { getTripPickupSummary } from "@/lib/queries";
 import { dayWindow } from "@/lib/day-window";
 import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { DriverGpsPanel } from "@/components/driver/driver-gps-panel";
 import { EmergencyButton } from "@/components/tracking/emergency-button";
 import {
@@ -145,11 +145,11 @@ export default async function DriverDashboard() {
     ? [...summary.byStop.values()].reduce((acc, b) => acc + b.picked.length, 0)
     : 0;
 
-  const nav = [
-    { href: "/driver", label: "Today's trip", icon: "🧭", exact: true },
-    { href: "/driver/checklist", label: "Pickup checklist", icon: "☑️" },
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
-    { href: "/install", label: "Install on phone", icon: "📲" },
+  const nav: NavItem[] = [
+    { href: "/driver", label: "Today's trip", icon: "navigate", exact: true },
+    { href: "/driver/checklist", label: "Pickup checklist", icon: "clipboard" },
+    { href: "/notifications", label: "Notifications", icon: "bell" },
+    { href: "/install", label: "Install on phone", icon: "install" },
   ];
 
   return (
@@ -167,6 +167,7 @@ export default async function DriverDashboard() {
       <PageHeader
         title="Driver panel"
         description="Your route for today, with the students waiting at each stop."
+        icon="navigate"
       />
 
       {shownIsAbandoned && shown ? (
@@ -195,6 +196,7 @@ export default async function DriverDashboard() {
 
       {!shown ? (
         <EmptyState
+          icon="bus"
           title="No trip scheduled"
           description="When the admin schedules a run for you, the stop order and the student checklist appear here."
         />
@@ -216,28 +218,33 @@ export default async function DriverDashboard() {
               value={shown.bus.busNumber}
               sub={shown.bus.registrationNo}
               tone="blue"
+              icon="bus"
             />
             <StatTile
               label="Route"
               value={shown.route.code}
               sub={shown.route.name}
+              icon="routes"
             />
             <StatTile
               label="Waiting now"
               value={totalWaiting}
               sub="students marked as waiting"
               tone={totalWaiting > 0 ? "amber" : "slate"}
+              icon="users"
             />
             <StatTile
               label="Picked up"
               value={`${totalPicked}/${shown.bus.capacity}`}
               sub="seats vs capacity"
               tone="emerald"
+              icon="check"
             />
           </div>
 
           <Card>
             <CardTitle
+              icon="pin"
               hint={
                 shown.direction === "PICKUP"
                   ? "Morning run · home to college"
@@ -311,6 +318,7 @@ export default async function DriverDashboard() {
 
           <Card>
             <CardTitle
+              icon="clock"
               hint={
                 <Link href="/driver/checklist" className="underline">
                   Open the pickup checklist

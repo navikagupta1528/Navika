@@ -49,10 +49,10 @@ async function check(
 }
 
 async function main() {
-  const session = await login(BASE, "admin@navika.test");
+  const session = await login(BASE, "admin@busguard.test");
 
-  console.log(`\n  Navika is running at ${BASE}`);
-  console.log("  signed in as admin@navika.test\n");
+  console.log(`\n  BusGuard is running at ${BASE}`);
+  console.log("  signed in as admin@busguard.test\n");
 
   const routes = await prisma.route.findMany({
     orderBy: { routeStops: { _count: "desc" } },

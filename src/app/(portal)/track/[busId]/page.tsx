@@ -3,11 +3,12 @@ import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { Role } from "@/generated/prisma/enums";
 import { getTrackingView } from "@/lib/tracking-queries";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { LiveTrackingMap } from "@/components/tracking/live-tracking-map";
+import { ArrivalCountdown } from "@/components/tracking/arrival-countdown";
 import { Badge, Card, CardTitle, EmptyState, StatTile } from "@/components/ui/primitives";
 import { formatDistance } from "@/lib/geo";
-import { etaLabel, formatTime } from "@/lib/utils";
+import { formatTime } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Live tracking" };
 
@@ -54,12 +55,12 @@ export default async function TrackBusPage({
           {
             href: session.role === "ADMIN" ? "/admin" : session.role === "DRIVER" ? "/driver" : `/${session.role.toLowerCase()}`,
             label: "Back",
-            icon: "←",
+            icon: "arrowLeft",
           },
         ]}
       >
-        <PageHeader title="Live tracking" />
-        <EmptyState title={copy.title} description={copy.body} />
+        <PageHeader title="Live tracking" icon="radio" />
+        <EmptyState icon="alert" title={copy.title} description={copy.body} />
         <p className="mt-4 text-sm">
           <Link className="text-brand-700 underline" href="/">
             Go to your dashboard
@@ -71,11 +72,11 @@ export default async function TrackBusPage({
 
   const { view, asOf } = result;
 
-  const nav = [
+  const nav: NavItem[] = [
     {
       href: session.role === "ADMIN" ? "/admin" : `/${session.role.toLowerCase()}`,
       label: "Dashboard",
-      icon: "⌂",
+      icon: "overview",
     },
   ];
 
@@ -84,6 +85,7 @@ export default async function TrackBusPage({
       <PageHeader
         title={`${view.bus.label} · ${view.bus.routeCode}`}
         description={view.bus.routeName}
+        icon="radio"
         action={
           <Badge tone={view.positionAge === "fresh" ? "emerald" : "slate"}>
             {view.positionAge === "fresh"
@@ -96,17 +98,57 @@ export default async function TrackBusPage({
       />
 
       <div className="space-y-6">
+        {/* The hero number, and the only one on this page that has to move as
+            the bus does. Everything else is a snapshot that is still true a
+            minute later; an ETA is not. */}
+        <Card accent="brand">
+          <CardTitle
+            icon="clock"
+            hint={
+              view.viewerStop
+                ? `Towards ${view.viewerStop.name}`
+                : "Whole route — no single stop to count down to"
+            }
+          >
+            {view.viewerStop ? "Arriving at your stop" : "Live arrival"}
+          </CardTitle>
+          <ArrivalCountdown
+            busId={view.bus.id}
+            stop={
+              view.viewerStop
+                ? {
+                    name: view.viewerStop.name,
+                    lat: view.viewerStop.lat,
+                    lng: view.viewerStop.lng,
+                  }
+                : null
+            }
+            initialEtaMinutes={view.etaMinutes}
+            serverNow={asOf}
+            initialPosition={
+              view.lastPosition
+                ? {
+                    lat: view.lastPosition.lat,
+                    lng: view.lastPosition.lng,
+                    at: view.lastPosition.at.getTime(),
+                  }
+                : null
+            }
+          />
+        </Card>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <StatTile
-            label="Arriving at your stop"
-            value={etaLabel(view.etaMinutes)}
-            sub={view.viewerStop?.name ?? "whole route"}
-            tone={view.etaMinutes !== null ? "emerald" : "slate"}
+            label="Your stop"
+            value={view.viewerStop?.name ?? "whole route"}
+            sub={view.bus.routeName}
+            icon="pin"
           />
           <StatTile
             label="Students on board"
             value={view.bus.onboardCount}
             sub={view.bus.registrationNo}
+            icon="users"
           />
           <StatTile
             label="Trip"
@@ -119,6 +161,7 @@ export default async function TrackBusPage({
                   : "no trip scheduled today"
             }
             tone={view.trip?.status === "ONGOING" ? "blue" : "slate"}
+            icon="navigate"
           />
         </div>
 
@@ -127,6 +170,16 @@ export default async function TrackBusPage({
           busId={view.bus.id}
           busLabel={view.bus.label}
           watchLabel={view.viewerStop?.name ?? null}
+          watchStop={
+            view.viewerStop
+              ? { lat: view.viewerStop.lat, lng: view.viewerStop.lng }
+              : null
+          }
+          pulseAt={
+            view.viewerStop
+              ? { lat: view.viewerStop.lat, lng: view.viewerStop.lng }
+              : null
+          }
           etaMinutes={view.etaMinutes}
           stops={view.stops.map((s) => ({
             id: s.id,
@@ -157,7 +210,7 @@ export default async function TrackBusPage({
 
         {view.viewerStop ? (
           <Card>
-            <CardTitle hint="Stops already served are marked.">Route progress</CardTitle>
+            <CardTitle icon="pin" hint="Stops already served are marked.">Route progress</CardTitle>
             <ol className="space-y-1.5">
               {view.stops.map((s) => (
                 <li

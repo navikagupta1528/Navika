@@ -62,6 +62,26 @@ const PROTECTED_AREAS: { prefix: string; roles: string[] }[] = [
 ];
 const AUTH_ROUTES = ["/login", "/register"];
 
+/**
+ * The public landing page at `/`.
+ *
+ * It used to be a redirect: the root route read the session and bounced you to
+ * `/login` or to your dashboard, which meant the very first thing anyone saw
+ * was a login form. There was no page that said what BusGuard is.
+ *
+ * The decision now lives *here* rather than in `src/app/page.tsx`, for one
+ * concrete reason: a page that reads the cookie to decide what to render is a
+ * dynamic route, so the landing page could never be prerendered. Moving the
+ * branch into the proxy lets `page.tsx` be a plain server component that the
+ * build can emit as static HTML, while the signed-in visitor still gets bounced
+ * to their dashboard the instant they hit `/` - before a byte of React is
+ * rendered, so there is no flash of a marketing page on the way to a dashboard.
+ *
+ * This is the only route in the app where the proxy decides *what* is rendered
+ * rather than merely who may enter.
+ */
+const PUBLIC_LANDING = "/";
+
 function homeFor(role: string): string {
   return role === "ADMIN"
     ? "/admin"
@@ -93,13 +113,28 @@ export async function proxy(request: NextRequest) {
       ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
+  const isLanding = pathname === PUBLIC_LANDING;
 
-  if (!area && !isAuthRoute) {
+  if (!area && !isAuthRoute && !isLanding) {
     return NextResponse.next();
   }
 
   // Read straight off the request to avoid a second cookies() round trip.
   const session = await decryptSession(request.cookies.get(SESSION_COOKIE)?.value);
+
+  /*
+   * A signed-in visitor landing on `/` gets their dashboard, and an anonymous
+   * one gets the landing page itself.
+   *
+   * This runs before any other check on this route, because `/` matches no
+   * area: without this branch the marketing page would render for everyone,
+   * including a driver who had simply typed the domain into their phone.
+   */
+  if (isLanding) {
+    return session
+      ? NextResponse.redirect(new URL(homeFor(session.role), request.url))
+      : NextResponse.next();
+  }
 
   if (area && !session) {
     const url = new URL("/login", request.url);
@@ -135,6 +170,6 @@ export const config = {
      * Server Actions post to the page they are used on, so protected pages
      * must stay inside the matcher.
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

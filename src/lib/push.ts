@@ -1,4 +1,17 @@
-import "server-only";
+/*
+ * NOTE: no `import "server-only"` here, for the same reason `db.ts` has none.
+ * This module is reachable from the plain-Node custom server: the geofence
+ * watcher (`src/server/geofence-watcher.ts`) delivers "bus almost at your stop"
+ * alerts, and it is called from the socket server's location handler and from the
+ * simulator's tick — both of which run under `tsx server.ts`, outside React's
+ * `react-server` condition, where the marker package deliberately throws.
+ *
+ * The marker is a guard against a Client Component importing this by accident.
+ * Nothing client-side does: the only callers are `notifications.ts` and the
+ * push-subscription server action, and both are Server Components/actions. The
+ * dependency below (`web-push`) is Node-only, so an accidental browser import
+ * would still fail loudly at build time.
+ */
 
 /**
  * Web push delivery.
@@ -24,7 +37,7 @@ let configured = false;
 function vapidKeys() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? "mailto:ops@navika.test";
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:ops@busguard.test";
 
   if (!publicKey || !privateKey) return null;
   if (!configured) {

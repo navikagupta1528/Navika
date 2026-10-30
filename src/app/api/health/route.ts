@@ -26,6 +26,7 @@
 
 import { prisma } from "@/lib/db";
 import { classifyDbError, statusForDbState, type DbState } from "@/lib/health";
+import { shouldAttachRedisAdapter } from "@/lib/realtime-scaling";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,15 @@ export async function GET() {
     {
       ok: db === "ok",
       db,
+      /*
+       * Which broadcast mode this instance is in.
+       *
+       * Worth reporting because the failure it guards against is invisible: two
+       * instances without a shared adapter each look perfectly healthy while
+       * half of every fleet watches a frozen map. An operator who can read
+       * "single-instance" here from a load-balanced deployment knows why.
+       */
+      realtime: shouldAttachRedisAdapter(process.env.REDIS_URL) ? "redis" : "single-instance",
       // Seconds, not a timestamp. Uptime is what tells an operator whether this
       // container has just restarted, which is the usual reason to be looking.
       uptime: Math.round(process.uptime()),

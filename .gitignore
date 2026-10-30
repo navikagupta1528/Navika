@@ -15,7 +15,7 @@ next-env.d.ts
 .env.production
 
 # scratch credential written by the local DB bootstrap
-.navika-db-pw
+.busguard-db-pw
 
 # prisma generated client
 /src/generated

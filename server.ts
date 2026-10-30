@@ -1,5 +1,5 @@
 /**
- * Navika custom server.
+ * BusGuard custom server.
  *
  * Next.js renders and routes everything as usual; Socket.IO is attached to the
  * same HTTP server so that one port serves both the pages and the live
@@ -22,10 +22,12 @@ import "dotenv/config";
 
 import { createServer } from "node:http";
 import next from "next";
-import { attachSocketServer, setSocketServer } from "./src/server/socket";
+import { attachSocketServer, closeRealtimeScaling } from "./src/server/socket";
+import { setSocketServer } from "./src/server/realtime-emit";
 import { isSocketRequest } from "./src/lib/socket-events";
 import { resetStaleSimulationFlags } from "./src/server/simulator-runner";
 import { startTripReconciler } from "./src/server/trip-reconciler";
+import { pruneOldGeofenceRows } from "./src/server/geofence-watcher";
 
 // `npm start` passes --prod instead of setting NODE_ENV inline, because
 // `NODE_ENV=production node server.js` is not valid in PowerShell or cmd.exe.
@@ -85,6 +87,18 @@ async function main() {
    * to load a page.
    */
   await startTripReconciler();
+
+  /*
+   * Trim old geofence dedup rows.
+   *
+   * A `StopApproach` row only exists to stop a repeat alert on the same day, and
+   * the fleet writes them all day. Left alone the table grows without bound, and
+   * the leak is silent: nothing reads a row from last month, and nothing complains
+   * until a query on a table nobody is watching starts to drag. Housekeeping on
+   * boot is enough — the retention window is a fortnight, so a day of downtime
+   * changes nothing.
+   */
+  await pruneOldGeofenceRows();
 
   /*
    * WEB SOCKET UPGRADES (dev only, but it is why this block exists at all)
@@ -178,7 +192,7 @@ async function main() {
 
     console.error(
       `\n  Port ${port} is already in use.\n` +
-        `\n  Almost always another Navika server is still running: a previous\n` +
+        `\n  Almost always another BusGuard server is still running: a previous\n` +
         `  npm run dev in a terminal you did not close, or an npm start left\n` +
         `  over from a smoke-test or Lighthouse run.\n` +
         `\n  Stop whatever holds it (PowerShell):\n` +
@@ -192,7 +206,7 @@ async function main() {
 
   server.listen(port, hostname, () => {
     console.log(
-      `\n  Navika ready on http://localhost:${port}` +
+      `\n  BusGuard ready on http://localhost:${port}` +
         `\n  mode:      ${dev ? "development" : process.env.NODE_ENV}` +
         `\n  realtime:  ${io.engine.clientsCount} client(s) connected\n`,
     );
@@ -204,13 +218,17 @@ async function main() {
     process.on(signal, () => {
       console.log(`\n  ${signal} received, shutting down`);
       io.close();
-      server.close(() => process.exit(0));
+      // Release the Redis adapter's connections too, when one was attached.
+      // Otherwise they keep the process alive until the platform force-kills it.
+      void closeRealtimeScaling().finally(() => {
+        server.close(() => process.exit(0));
+      });
       setTimeout(() => process.exit(1), 10_000).unref();
     });
   }
 }
 
 main().catch((error) => {
-  console.error("\n  Failed to start Navika:\n", error);
+  console.error("\n  Failed to start BusGuard:\n", error);
   process.exit(1);
 });

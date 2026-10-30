@@ -63,7 +63,7 @@ export async function GET(
   // inside `contentDisposition` strips anything that would break a header.
   return csvResponse(
     csv,
-    `navika-history-${history.student.name}-${range.from}-to-${range.to}.csv`,
+    `busguard-history-${history.student.name}-${range.from}-to-${range.to}.csv`,
   );
 }
 

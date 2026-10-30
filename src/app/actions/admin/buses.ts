@@ -13,6 +13,7 @@ import {
 import { readForm } from "@/lib/admin/fields";
 import { busFields } from "@/lib/admin/form-defs";
 import { busSchema } from "@/lib/validations";
+import { generateDeviceToken } from "@/lib/device-token";
 import { BusStatus } from "@/generated/prisma/enums";
 
 function text(formData: FormData, key: string): string {
@@ -154,6 +155,63 @@ export async function unassignBusDriver(formData: FormData): Promise<void> {
   await prisma.busDriver.update({
     where: { id: assignmentId },
     data: { validTo: new Date() },
+  });
+
+  revalidatePath(`/admin/buses/${busId}`);
+}
+
+/**
+ * Mint a tracker token for a bus.
+ *
+ * Returns the plaintext in the action state, which the panel shows once and then
+ * cannot retrieve again: the database only ever holds the hash. That is the same
+ * bargain every API-token screen makes, and the reason the panel says so in as
+ * many words - an admin who navigates away without copying it has to revoke and
+ * reissue, and needs to know that before it happens.
+ *
+ * A separate row per token rather than overwriting a column, so fitting a second
+ * tracker does not silently break the first.
+ */
+export async function createBusDevice(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await assertAdmin();
+
+  const busId = text(formData, "busId");
+  const label = text(formData, "label") || "Tracker";
+  if (!busId) return { errors: { label: "Missing bus." } };
+  if (label.length > 60) {
+    return { errors: { label: "Keep the label under 60 characters." } };
+  }
+
+  const bus = await prisma.bus.findUnique({ where: { id: busId }, select: { id: true } });
+  if (!bus) return { errors: { label: "That bus no longer exists." } };
+
+  const { token, hash } = generateDeviceToken();
+  await prisma.busDevice.create({ data: { busId, label, tokenHash: hash } });
+
+  revalidatePath(`/admin/buses/${busId}`);
+  return { ok: true, message: token };
+}
+
+/**
+ * Revoke a tracker token.
+ *
+ * Soft, not a delete: the row is kept so the panel can still show that the
+ * device existed and when it stopped being trusted. A hard delete would leave an
+ * admin staring at a token that simply vanished, with nothing to explain why the
+ * tracker stopped reporting.
+ */
+export async function revokeBusDevice(formData: FormData): Promise<void> {
+  await assertAdmin();
+  const id = text(formData, "id");
+  const busId = text(formData, "busId");
+  if (!id) return;
+
+  await prisma.busDevice.update({
+    where: { id },
+    data: { revokedAt: new Date() },
   });
 
   revalidatePath(`/admin/buses/${busId}`);

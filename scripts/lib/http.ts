@@ -16,10 +16,10 @@
  * Pure Node, no Prisma and no Next imports, so it runs under plain `tsx`.
  */
 
-export const DEMO_PASSWORD = "navika123";
+export const DEMO_PASSWORD = "busguard123";
 
 /** Cookie name, matched from the `Set-Cookie` header the login action emits. */
-const SESSION_COOKIE = "navika_session=";
+const SESSION_COOKIE = "busguard_session=";
 
 /**
  * The port the app under test is listening on.

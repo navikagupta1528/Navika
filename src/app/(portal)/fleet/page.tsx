@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { getFleetPositions, getWatchableBusIds } from "@/lib/tracking-queries";
 import { Role } from "@/generated/prisma/enums";
-import { PortalShell, PageHeader } from "@/components/portal/portal-shell";
+import { PortalShell, PageHeader, type NavItem } from "@/components/portal/portal-shell";
 import { FleetMap } from "@/components/tracking/fleet-map";
 import { Badge, EmptyState, StatTile } from "@/components/ui/primitives";
 import { formatTime, timeAgo } from "@/lib/utils";
@@ -28,10 +28,10 @@ export default async function FleetPage() {
   const studentsOnBoard = buses.reduce((sum, b) => sum + b.onboardCount, 0);
   const simulated = buses.filter((b) => b.isSimulated).length;
 
-  const nav = [
-    { href: `/${session.role.toLowerCase()}`, label: "Dashboard", icon: "⌂" },
-    { href: "/fleet", label: "Live fleet", icon: "📡" },
-    { href: "/notifications", label: "Notifications", icon: "🔔" },
+  const nav: NavItem[] = [
+    { href: `/${session.role.toLowerCase()}`, label: "Dashboard", icon: "overview" },
+    { href: "/fleet", label: "Live fleet", icon: "radio" },
+    { href: "/notifications", label: "Notifications", icon: "bell" },
   ];
 
   return (
@@ -43,6 +43,7 @@ export default async function FleetPage() {
       <PageHeader
         title="Live fleet"
         description="Buses that reported a position in the last two minutes."
+        icon="radio"
         action={
           <Badge tone={buses.length > 0 ? "emerald" : "slate"}>
             {buses.length} reporting
@@ -52,19 +53,21 @@ export default async function FleetPage() {
 
       {buses.length === 0 ? (
         <EmptyState
+          icon="radio"
           title="No buses are reporting right now"
           description="A bus appears here as soon as its driver starts sharing a location. If a trip is running and the bus is missing, the driver's phone has probably lost signal."
         />
       ) : (
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatTile label="Buses reporting" value={buses.length} tone="emerald" />
+            <StatTile label="Buses reporting" value={buses.length} tone="emerald" icon="bus" />
             <StatTile
               label="On a running trip"
               value={onTrip}
               tone={onTrip > 0 ? "blue" : "slate"}
+              icon="navigate"
             />
-            <StatTile label="Students on board" value={studentsOnBoard} />
+            <StatTile label="Students on board" value={studentsOnBoard} icon="users" />
           </div>
 
           {simulated > 0 ? (
@@ -92,7 +95,7 @@ export default async function FleetPage() {
             height="30rem"
           />
 
-          <div className="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                 <tr>

@@ -11,6 +11,7 @@ export default function NewDriverPage() {
       <PageHeader
         title="New driver"
         description="Creates the login the driver uses on their phone, plus the licence record."
+        icon="drivers"
         action={
           <Link href="/admin/drivers" className="btn-secondary">
             Back to drivers
@@ -20,7 +21,11 @@ export default function NewDriverPage() {
 
       <div className="max-w-3xl">
         <Card>
-          <CardTitle hint="Drivers cannot sign themselves up; this is the only way in.">
+          <CardTitle
+            icon="drivers"
+            size="md"
+            hint="Drivers cannot sign themselves up; this is the only way in."
+          >
             Driver details
           </CardTitle>
           <EntityForm

@@ -20,6 +20,8 @@ import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { prisma } from "@/lib/db";
 import { decryptSession } from "@/server/session-core";
+import { applyPosition } from "@/server/position-pipeline";
+import { redisAdapterUrl, scalingNotice } from "@/lib/realtime-scaling";
 import {
   EV,
   ROOM,
@@ -27,7 +29,6 @@ import {
   type BusLocationPayload,
   type DriverLocationPayload,
   type SocketErrorPayload,
-  type StopArrivalPayload,
 } from "@/lib/socket-events";
 
 /** Reject a position update closer together than this, per socket. */
@@ -77,6 +78,17 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     maxHttpBufferSize: 1e5,
   });
 
+  /*
+   * Share broadcasts across instances when a Redis URL is configured.
+   *
+   * Opt-in on purpose: the single-instance deployment this project actually
+   * ships needs no Redis, and with `REDIS_URL` unset this returns immediately.
+   * Not awaited - the dynamic import and the connection must not hold up the
+   * `listen()` that follows in `server.ts`. The window before the adapter is
+   * attached is a few milliseconds at boot, during which rooms are local-only.
+   */
+  void attachRedisAdapter(io);
+
   // -------------------------------------------------------------------------
   // Authentication: the session cookie is the only credential. There is no
   // token in localStorage to steal via XSS.
@@ -86,7 +98,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     const match = raw
       .split(";")
       .map((c) => c.trim().split("="))
-      .find(([name]) => name === "navika_session");
+      .find(([name]) => name === "busguard_session");
 
     const session = await decryptSession(match?.[1]);
     if (!session) {
@@ -222,39 +234,15 @@ export function attachSocketServer(httpServer: HttpServer): Server {
           ? raw.headingDeg % 360
           : null;
 
-      const onboard = await prisma.pickupRecord.count({
-        where: {
-          trip: { busId, status: "ONGOING" },
-          status: "PICKED",
-        },
-      });
+      // Persist on a slower cadence than the ping. The broadcast, the onboard
+      // count, the write and the three watchers all live in `applyPosition`,
+      // shared with the hardware ingestion path so the two cannot drift.
+      const persist = now - socket.data.lastPersistAt >= PERSIST_EVERY_MS;
+      if (persist) socket.data.lastPersistAt = now;
 
-      // Broadcast always, so the map stays smooth.
-      io.to(ROOM.bus(busId)).emit(EV.busLocation, {
-        busId,
-        lat,
-        lng,
-        speedKph,
-        headingDeg,
-        onboardCount: onboard,
-        at: now,
-      } satisfies BusLocationPayload);
+      const reportedAt = typeof raw?.at === "number" && Number.isFinite(raw.at) ? raw.at : null;
 
-      // Persist on a slower cadence.
-      if (now - socket.data.lastPersistAt < PERSIST_EVERY_MS) return;
-      socket.data.lastPersistAt = now;
-
-      await prisma.bus.update({
-        where: { id: busId },
-        data: {
-          currentLat: lat,
-          currentLng: lng,
-          speedKph,
-          headingDeg,
-          lastLocationAt: new Date(now),
-          onboardCount: onboard,
-        },
-      });
+      await applyPosition({ busId, lat, lng, speedKph, headingDeg, reportedAt, persist });
     });
   });
 
@@ -262,41 +250,76 @@ export function attachSocketServer(httpServer: HttpServer): Server {
 }
 
 // ---------------------------------------------------------------------------
-// Server-side emitters, used by Route Handlers and Server Actions so a write
-// from anywhere (REST, cron, admin form) pushes to connected clients too.
+// Multi-instance broadcasting
 // ---------------------------------------------------------------------------
 
-let ioRef: Server | null = null;
+let closeScaling: (() => Promise<void>) | null = null;
 
-export function setSocketServer(io: Server): void {
-  ioRef = io;
-}
+/**
+ * Attach the Socket.IO Redis adapter when `REDIS_URL` is set, or do nothing.
+ *
+ * One process broadcasts to its own clients for free; two process do not, and
+ * the failure is invisible because every page still renders and nothing logs an
+ * error. A driver on instance A moves a bus and a parent on instance B watches a
+ * frozen map. The Redis adapter is Socket.IO's standard answer, and this is the
+ * whole of the integration.
+ *
+ * The import is dynamic so the two Redis packages are only loaded when actually
+ * used, and any failure here degrades to the single-instance behaviour this app
+ * shipped with rather than preventing boot. That matters because a bad
+ * `REDIS_URL` must not take the whole school's app down.
+ */
+async function attachRedisAdapter(io: Server): Promise<void> {
+  const url = redisAdapterUrl(process.env.REDIS_URL);
+  if (!url) {
+    console.log(`  ${scalingNotice(process.env.REDIS_URL)}`);
+    return;
+  }
 
-export function pushBusLocation(payload: BusLocationPayload): void {
-  ioRef?.to(ROOM.bus(payload.busId)).emit(EV.busLocation, payload);
-}
+  try {
+    const [{ createAdapter }, { createClient }] = await Promise.all([
+      import("@socket.io/redis-adapter"),
+      import("redis"),
+    ]);
 
-export function pushAlert(busId: string, payload: unknown): void {
-  ioRef?.to(ROOM.bus(busId)).emit(EV.busAlert, payload);
-}
+    const pub = createClient({ url });
+    // A dedicated subscriber connection: a connection with active subscriptions
+    // cannot issue normal commands, which is a trap Redis adapters hit first.
+    const sub = pub.duplicate();
 
-export function pushPickupUpdate(busId: string, payload: unknown): void {
-  ioRef?.to(ROOM.bus(busId)).emit(EV.pickupUpdate, payload);
+    for (const client of [pub, sub]) {
+      // Without a listener, an ioredis-style client emits an unhandled 'error'
+      // on a dropped connection and takes the process down.
+      client.on("error", (error: unknown) => {
+        console.warn(
+          "  realtime: Redis client error:",
+          error instanceof Error ? error.message : error,
+        );
+      });
+      await client.connect();
+    }
+
+    io.adapter(createAdapter(pub, sub));
+    closeScaling = async () => {
+      await Promise.allSettled([pub.quit(), sub.quit()]);
+    };
+
+    console.log(`  ${scalingNotice(process.env.REDIS_URL)}`);
+  } catch (error) {
+    console.warn(
+      "  realtime: Redis adapter could not be attached; staying single-instance:\n",
+      error instanceof Error ? error.message : error,
+    );
+  }
 }
 
 /**
- * Tell watchers a bus reached a stop.
+ * Close the shared adapter's Redis connections on shutdown.
  *
- * Emitted to the fleet room as well as the bus room, because the fleet map is the
- * screen most likely to be open when nothing is being watched individually, and a
- * bus that visibly pulls into Gate 1 is most of what makes a demo legible.
+ * Called from the custom server's signal handler. Without it the open sockets
+ * keep the process alive until the platform force-kills it, which shows up as a
+ * 30-second hang on every deploy.
  */
-export function pushStopArrival(payload: StopArrivalPayload): void {
-  if (!ioRef) return;
-  ioRef.to(ROOM.bus(payload.busId)).emit(EV.stopArrival, payload);
-  ioRef.to(ROOM.fleet).emit(EV.stopArrival, payload);
-}
-
-export function pushToUser(userId: string, event: string, payload: unknown): void {
-  ioRef?.to(ROOM.user(userId)).emit(event, payload);
+export async function closeRealtimeScaling(): Promise<void> {
+  if (closeScaling) await closeScaling();
 }
