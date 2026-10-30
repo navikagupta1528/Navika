@@ -1,15 +1,8 @@
 /**
- * Server-side socket emitters.
+ * Server-side realtime emitters.
  *
- * Every write that originates outside a live socket - a Server Action, a Route
- * Handler, a background watcher - reaches connected clients through here. These
- * used to live at the bottom of `socket.ts`, but that file also imports the
- * position pipeline, and the pipeline needs to push a broadcast. Keeping the
- * emitters and the connection wiring in one module made that a circular import
- * between `socket.ts` and `position-pipeline.ts`. Splitting the outbound side out
- * breaks the cycle honestly rather than relying on it resolving at call time.
- *
- * Plain Node, no `server-only`: the custom server loads it directly.
+ * Swapped to Supabase Realtime Broadcast so it works on Vercel (serverless).
+ * Falls back to Socket.IO if present for local dev with the custom server.
  */
 import type { Server } from "socket.io";
 import {
@@ -18,6 +11,11 @@ import {
   type BusLocationPayload,
   type StopArrivalPayload,
 } from "@/lib/socket-events";
+import {
+  broadcastToBus,
+  broadcastToFleet,
+  broadcastToUser,
+} from "@/lib/realtime-supabase/server";
 
 let ioRef: Server | null = null;
 
@@ -27,30 +25,46 @@ export function setSocketServer(io: Server): void {
 }
 
 export function pushBusLocation(payload: BusLocationPayload): void {
-  ioRef?.to(ROOM.bus(payload.busId)).emit(EV.busLocation, payload);
+  if (ioRef) {
+    ioRef.to(ROOM.bus(payload.busId)).emit(EV.busLocation, payload);
+    return;
+  }
+  void broadcastToBus(payload.busId, EV.busLocation, payload);
 }
 
 export function pushAlert(busId: string, payload: unknown): void {
-  ioRef?.to(ROOM.bus(busId)).emit(EV.busAlert, payload);
+  if (ioRef) {
+    ioRef.to(ROOM.bus(busId)).emit(EV.busAlert, payload);
+    return;
+  }
+  void broadcastToBus(busId, EV.busAlert, payload);
 }
 
 export function pushPickupUpdate(busId: string, payload: unknown): void {
-  ioRef?.to(ROOM.bus(busId)).emit(EV.pickupUpdate, payload);
+  if (ioRef) {
+    ioRef.to(ROOM.bus(busId)).emit(EV.pickupUpdate, payload);
+    return;
+  }
+  void broadcastToBus(busId, EV.pickupUpdate, payload);
 }
 
 /**
  * Tell watchers a bus reached a stop.
- *
- * Emitted to the fleet room as well as the bus room, because the fleet map is the
- * screen most likely to be open when nothing is being watched individually, and a
- * bus that visibly pulls into Gate 1 is most of what makes a demo legible.
  */
 export function pushStopArrival(payload: StopArrivalPayload): void {
-  if (!ioRef) return;
-  ioRef.to(ROOM.bus(payload.busId)).emit(EV.stopArrival, payload);
-  ioRef.to(ROOM.fleet).emit(EV.stopArrival, payload);
+  if (ioRef) {
+    ioRef.to(ROOM.bus(payload.busId)).emit(EV.stopArrival, payload);
+    ioRef.to(ROOM.fleet).emit(EV.stopArrival, payload);
+    return;
+  }
+  void broadcastToBus(payload.busId, EV.stopArrival, payload);
+  void broadcastToFleet(EV.stopArrival, payload);
 }
 
 export function pushToUser(userId: string, event: string, payload: unknown): void {
-  ioRef?.to(ROOM.user(userId)).emit(event, payload);
+  if (ioRef) {
+    ioRef.to(ROOM.user(userId)).emit(event, payload);
+    return;
+  }
+  void broadcastToUser(userId, event, payload);
 }

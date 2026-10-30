@@ -11,14 +11,14 @@ import {
 export type { SessionPayload };
 export { SESSION_COOKIE };
 
-export async function createSession(payload: SessionPayload): Promise<void> {
+export async function createSession(payload: SessionPayload & { mustChangePassword?: boolean }, rememberMe = false): Promise<void> {
   const token = await encryptSession(payload);
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    maxAge: rememberMe ? 60 * 60 * 24 * 30 : SESSION_MAX_AGE_SECONDS,
     path: "/",
   });
 }

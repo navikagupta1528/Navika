@@ -54,8 +54,8 @@ export default async function FleetPage() {
       {buses.length === 0 ? (
         <EmptyState
           icon="radio"
-          title="No buses are reporting right now"
-          description="A bus appears here as soon as its driver starts sharing a location. If a trip is running and the bus is missing, the driver's phone has probably lost signal."
+          title="No buses are live right now"
+          description="Buses go live when there's an ongoing trip or when driver starts sharing location. Check Trips for today's schedule."
         />
       ) : (
         <div className="space-y-5">

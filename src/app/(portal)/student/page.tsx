@@ -164,13 +164,13 @@ export default async function StudentDashboard() {
               icon="signal"
               value={
                 isLive ? (
-                  <StatusDot online label="On route" />
+                  <StatusDot online label="Live" />
                 ) : (
-                  <StatusDot online={false} label="Not reporting" />
+                  <StatusDot online={false} label="Not live" />
                 )
               }
-              sub={`Last seen ${timeAgo(bus?.lastLocationAt)}`}
-              tone={isLive ? "emerald" : "amber"}
+              sub={isLive ? `Last seen ${timeAgo(bus?.lastLocationAt)}` : liveTrip?.status === "SCHEDULED" ? "Trip scheduled — waiting for driver" : liveTrip?.status === "ONGOING" ? "Trip running — waiting for location" : "No trip today"}
+              tone={isLive ? "emerald" : liveTrip?.status === "ONGOING" ? "amber" : "slate"}
             />
           </div>
 

@@ -11,7 +11,7 @@ export default function RegisterPage() {
       </h1>
       <p className="mt-1 mb-6 text-sm text-slate-500">
         Track your bus, get arrival alerts, and let the driver know you are
-        waiting.
+        waiting. Students can also login with Roll No.
       </p>
       <RegisterForm />
     </div>

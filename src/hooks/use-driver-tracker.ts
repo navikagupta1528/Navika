@@ -132,21 +132,19 @@ export function useDriverTracker(): DriverTracker {
 
   const stop = useCallback(() => {
     teardown();
-    emitToServer(EV.driverStop);
+    try {
+      emitToServer(EV.driverStop);
+    } catch {}
     setStatus("idle");
   }, [teardown]);
 
   const start = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    // The order of these checks is the order a user is most likely to hit them.
     if (!("geolocation" in navigator)) {
       setStatus("unsupported");
       return;
     }
-    // `isSecureContext` is false on http:// except for localhost. Chrome allows
-    // geolocation on localhost, so testing only that would say "fine" locally
-    // and fail for a driver on the college LAN — the exact case this catches.
     if (!window.isSecureContext) {
       setStatus("insecure");
       return;
@@ -156,11 +154,36 @@ export function useDriverTracker(): DriverTracker {
     setStatus("starting");
     setRejected(null);
 
-    // Tell the server to start routing this socket into the bus's rooms. Its
-    // reply arrives on `server:error` if the driver has no bus assigned, which
-    // is handled below; sending positions before this is answered is harmless
-    // because the server rejects them with NO_BUS rather than dropping them.
-    emitToServer(EV.driverStart);
+    void (async () => {
+      try {
+        const res = await fetch("/api/driver/start", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data?.error?.code === "NO_BUS") {
+            teardown();
+            setStatus("no-bus");
+            active.current = false;
+            return;
+          }
+          if (res.status === 401) {
+            teardown();
+            setStatus("denied");
+            active.current = false;
+            return;
+          }
+        } else {
+          setStatus("sharing");
+        }
+      } catch {
+        // Continue anyway, fallback to socket
+      }
+      try {
+        emitToServer(EV.driverStart);
+      } catch {}
+    })();
 
     watchId.current = navigator.geolocation.watchPosition(
       (position) => {
@@ -183,11 +206,6 @@ export function useDriverTracker(): DriverTracker {
           return;
         }
 
-        // Resolve the heading *before* overwriting the previous fix. The
-        // fallback in `resolveHeadingDeg` is the bearing between the last two
-        // accepted fixes, so handing it `prev === next` would compare a point
-        // with itself, divide by a zero time delta, and yield no heading at all
-        // on exactly the devices that need the fallback.
         const prev = accepted.current;
         const headingDeg = resolveHeadingDeg(prev, next, next.headingDeg);
 
@@ -195,23 +213,29 @@ export function useDriverTracker(): DriverTracker {
         setFix(next);
         setRejected(null);
 
-        // Always transmit the first fix, so a bus appears on the map straight
-        // away rather than after the throttle window opens.
         const now = Date.now();
         if (now - lastSentAt.current < SEND_EVERY_MS) return;
         lastSentAt.current = now;
 
-        emitToServer(EV.driverLocation, {
+        const payload: DriverLocationPayload = {
           lat: next.lat,
           lng: next.lng,
           speedKph: next.speedKph ?? undefined,
           headingDeg: headingDeg ?? undefined,
           accuracyM: Number.isFinite(next.accuracyM) ? next.accuracyM : undefined,
-          // The fix's own timestamp. If the socket buffers this while out of
-          // signal and flushes it later, the server can tell it is a replay and
-          // drop it instead of drawing the bus jumping backwards.
           at: next.at,
-        } satisfies DriverLocationPayload);
+        };
+
+        void fetch("/api/driver/location", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+
+        try {
+          emitToServer(EV.driverLocation, payload);
+        } catch {}
       },
       (error) => {
         // `watchPosition` keeps calling this on every failure, so the guard

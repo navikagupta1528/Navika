@@ -20,6 +20,7 @@ export type SessionRole = "STUDENT" | "PARENT" | "DRIVER" | "ADMIN";
 export type SessionPayload = {
   userId: string;
   role: SessionRole;
+  mustChangePassword?: boolean;
 };
 
 function getKey(): Uint8Array {
@@ -33,7 +34,7 @@ function getKey(): Uint8Array {
 }
 
 export async function encryptSession(payload: SessionPayload): Promise<string> {
-  return new SignJWT({ role: payload.role })
+  return new SignJWT({ role: payload.role, mustChangePassword: payload.mustChangePassword ?? false })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.userId)
     .setIssuedAt()
@@ -53,6 +54,7 @@ export async function decryptSession(
     return {
       userId: payload.sub,
       role: payload.role as SessionRole,
+      mustChangePassword: payload.mustChangePassword === true,
     };
   } catch {
     return null;

@@ -83,11 +83,13 @@ enum DrivingEventType {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
+  username     String?  @unique
   passwordHash String
   name         String
   phone        String?
   role         Role     @default(STUDENT)
   isActive     Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

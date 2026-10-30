@@ -94,8 +94,8 @@ export default async function AdminDashboard() {
           {overview.liveBuses.length === 0 ? (
             <EmptyState
               icon="radio"
-              title="No bus has reported a location yet"
-              description="Live positions start appearing once a driver begins a trip with location sharing on."
+              title="No bus is live right now"
+              description="Buses appear here when they have a trip running today or have reported location recently. When driver shares location, it goes live instantly."
             />
           ) : (
             <div className="overflow-x-auto">

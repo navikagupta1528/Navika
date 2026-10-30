@@ -31,72 +31,71 @@ export async function login(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+  const identifier = String(formData.get("email") || formData.get("username") || formData.get("identifier") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
 
-  if (!parsed.success) {
-    return { errors: flatten(parsed.error) };
+  if (!identifier || !password) {
+    return { errors: { email: ["Username/Roll No. and password are required"] } };
   }
 
-  /*
-   * Throttle before the password is looked at, not after.
-   *
-   * bcrypt at cost 12 is deliberately slow, which is what makes an offline guess
-   * expensive - and it is also what makes an *online* guess expensive to us for
-   * free. But "expensive per attempt" is not "bounded in total", and without this
-   * a script could guess forever against the system that reports where children
-   * are. Refusing first means we do not pay bcrypt on an attempt we already know
-   * we are going to turn away.
-   *
-   * The throttle is keyed on the submitted address before any lookup, and every
-   * failure below is charged to it. That is deliberate: if only accounts that
-   * existed were counted, an attacker would learn which addresses are real by
-   * watching who gets locked out.
-   */
-  const throttle = await checkThrottle("login", parsed.data.email);
+  const throttle = await checkThrottle("login", identifier);
   if (!throttle.ok) {
     return { message: lockedOutMessage(throttle.retryAfterSeconds) };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
+  let user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: identifier },
+        { username: identifier },
+      ],
+    },
     select: {
       id: true,
       passwordHash: true,
       role: true,
       isActive: true,
+      mustChangePassword: true,
     },
   });
 
-  // Same message for unknown email and wrong password so the form does not
-  // reveal which accounts exist.
-  const invalid = { message: "Incorrect email or password." };
+  if (!user && identifier.includes("@")) {
+    user = await prisma.user.findUnique({
+      where: { email: identifier },
+      select: {
+        id: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+        mustChangePassword: true,
+      },
+    });
+  }
+
+  const invalid = { message: "Incorrect username/roll no or password." };
 
   if (!user) {
-    // Burn comparable time to avoid leaking account existence via timing.
-    await verifyPassword(parsed.data.password, DUMMY_HASH);
-    await recordFailure("login", parsed.data.email);
+    await verifyPassword(password, DUMMY_HASH);
+    await recordFailure("login", identifier);
     return invalid;
   }
 
-  const ok = await verifyPassword(parsed.data.password, user.passwordHash);
+  const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
-    await recordFailure("login", parsed.data.email);
+    await recordFailure("login", identifier);
     return invalid;
   }
 
-  // A deactivated account is not a failed password, so it is not charged to the
-  // throttle - otherwise a locked-out user's only way to discover their account
-  // was switched off would be to keep guessing at it.
   if (!user.isActive) {
     return { message: "This account has been deactivated. Contact your admin." };
   }
 
-  // Only now, with the password known good, does the counter get cleared.
-  await recordSuccess("login", parsed.data.email);
-  await createSession({ userId: user.id, role: user.role });
+  await recordSuccess("login", identifier);
+  const rememberMe = formData.get("rememberMe") === "1";
+  await createSession({ userId: user.id, role: user.role, mustChangePassword: user.mustChangePassword }, rememberMe);
+  if (user.mustChangePassword) {
+    redirect("/change-password");
+  }
   redirect(homeForRole(user.role));
 }
 
@@ -233,6 +232,126 @@ export async function register(
   await recordSuccess("register", data.email);
   await createSession({ userId: user.id, role: user.role });
   redirect(homeForRole(user.role));
+}
+
+// ---------------------------------------------------------------------------
+// Complete profile + set password (first time)
+// ---------------------------------------------------------------------------
+
+export async function completeProfile(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  try {
+    const { requireSession } = await import("@/lib/dal");
+    const session = await requireSession();
+    const name = String(formData.get("name") || "").trim();
+    const phone = String(formData.get("phone") || "").trim();
+    const newPassword = String(formData.get("newPassword") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+
+    if (!name) return { message: "Name is required." };
+    if (!phone) return { message: "Phone number is required." };
+    if (newPassword.length < 6) return { message: "Password must be at least 6 characters." };
+    if (newPassword !== confirmPassword) return { message: "Passwords do not match." };
+
+    const passwordHash = await hashPassword(newPassword);
+
+    await prisma.user.update({
+      where: { id: session.userId },
+      data: { name, phone, passwordHash, mustChangePassword: false },
+    });
+
+    if (session.role === "DRIVER") {
+      const licenseNo = String(formData.get("licenseNo") || "").trim();
+      const licenseExpiry = formData.get("licenseExpiry") ? new Date(String(formData.get("licenseExpiry"))) : null;
+      const experienceYr = formData.get("experienceYr") ? Number(formData.get("experienceYr")) : 0;
+      if (licenseNo) {
+        await prisma.driverProfile.upsert({
+          where: { userId: session.userId },
+          update: { licenseNo, licenseExpiry, experienceYr },
+          create: { userId: session.userId, licenseNo, licenseExpiry, experienceYr },
+        });
+      }
+    }
+
+    await createSession({ userId: session.userId, role: session.role, mustChangePassword: false });
+    redirect(homeForRole(session.role));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("NEXT_REDIRECT")) throw error;
+    return { message: "Something went wrong." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Change password (self or forced)
+// ---------------------------------------------------------------------------
+
+export async function changePassword(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  try {
+    const { requireSession } = await import("@/lib/dal");
+    const session = await requireSession();
+    const newPassword = String(formData.get("newPassword") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+
+    if (newPassword.length < 6) {
+      return { message: "Password must be at least 6 characters." };
+    }
+    if (newPassword !== confirmPassword) {
+      return { message: "Passwords do not match." };
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: session.userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+
+    await createSession({ userId: session.userId, role: session.role, mustChangePassword: false });
+    redirect(homeForRole(session.role));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("NEXT_REDIRECT")) throw error;
+    return { message: "Something went wrong." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Admin: reset password for student/parent
+// ---------------------------------------------------------------------------
+
+export async function adminResetPassword(formData: FormData): Promise<AuthState> {
+  try {
+    const { requireRole } = await import("@/lib/dal");
+    await requireRole(Role.ADMIN);
+    const userId = String(formData.get("userId") || "");
+    const newPassword = String(formData.get("newPassword") || "");
+
+    if (!userId || newPassword.length < 6) {
+      return { message: "Invalid input." };
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!target) return { message: "User not found." };
+    if (target.role === Role.DRIVER || target.role === Role.ADMIN) {
+      return { message: "Cannot reset password for this role." };
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: true },
+    });
+    return { message: "Password reset. User will be asked to change on next login." };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("NEXT_REDIRECT")) throw error;
+    return { message: "Something went wrong." };
+  }
 }
 
 // ---------------------------------------------------------------------------

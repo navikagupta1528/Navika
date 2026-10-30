@@ -238,10 +238,11 @@ export default async function ParentDashboard() {
                       value={
                         <StatusDot
                           online={row.isLive}
-                          label={row.isLive ? "On route" : "Not reporting"}
+                          label={row.isLive ? "Live" : "Not live"}
                         />
                       }
-                      sub={`Last seen ${timeAgo(row.bus?.lastLocationAt)}`}
+                      sub={row.isLive ? `Last seen ${timeAgo(row.bus?.lastLocationAt)}` : row.trip?.status === "SCHEDULED" ? "Trip scheduled — waiting for driver" : row.trip?.status === "ONGOING" ? "Trip running — waiting for location" : "No trip today"}
+                      tone={row.isLive ? "emerald" : row.trip?.status === "ONGOING" ? "amber" : "slate"}
                     />
                   </div>
 
