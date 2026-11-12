@@ -514,6 +514,31 @@ npm run create:admin
 > the username/mustChangePassword migration has not been applied. Run
 > `npx prisma migrate deploy`, or apply `migration_username.sql` by hand.
 
+Accounts that existed *before* the username column was added have
+`username = NULL`, so their roll number / short name does not work yet even
+though the column now exists. Fill those in once:
+
+```bash
+npm run users:backfill            # dry run: show what would change
+npm run users:backfill -- --apply
+```
+
+Students get their enrollment number as the username; drivers, parents and
+admins get the part of their email before `@`. The script is idempotent and
+reports rather than overwrites a name that is already taken.
+
+To check the migration against a database that already has data (rather than an
+empty one), `npm run verify:deploy` builds a throwaway database with the older
+migrations applied and runs `prisma migrate deploy` against it.
+
+> Supabase's direct database host (`db.<ref>.supabase.co`) is IPv6-only. On a
+> network without IPv6, use the pooler instead:
+> `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+> The pooler presents Supabase's own CA, so pass it explicitly with
+> `sslmode=verify-full&sslrootcert=/path/to/prod-ca-2021.crt` (download it from
+> the Supabase dashboard) if your client does not trust it.
+
+
 The seed stamps bus positions with `lastLocationAt` at seed time, so they fall
 outside the two-minute live window a couple of minutes after seeding. Open
 `/fleet` right after seeding, or restamp:
