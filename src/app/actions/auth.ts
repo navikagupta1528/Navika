@@ -11,7 +11,7 @@ import {
   recordFailure,
   recordSuccess,
 } from "@/lib/login-guard";
-import { loginSchema, registerSchema } from "@/lib/validations";
+import { registerSchema } from "@/lib/validations";
 import { Role } from "@/generated/prisma/enums";
 
 export type AuthState = {
@@ -72,7 +72,7 @@ export async function login(
     });
   }
 
-  const invalid = { message: "Incorrect username/roll no or password." };
+  const invalid = { message: "Incorrect email/username or password." };
 
   if (!user) {
     await verifyPassword(password, DUMMY_HASH);
@@ -203,6 +203,14 @@ export async function register(
     data: {
       name: data.name,
       email: data.email,
+      // Students sign in with their roll number, so the enrollment number is
+      // stored as the username too. Lower-cased because the login action
+      // lower-cases whatever is typed, and the two must agree.
+      // Parents and admins sign in with their email address.
+      username:
+        role === Role.STUDENT && data.enrollmentNo
+          ? data.enrollmentNo.toLowerCase()
+          : null,
       passwordHash,
       phone: data.phone || null,
       role,

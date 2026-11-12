@@ -498,6 +498,22 @@ Password for all of them: `busguard123`
 | Parent  | `parent1@busguard.test`               |
 | Student | `aarav.sharma0@student.busguard.test` |
 
+Students can also sign in with their roll number (the enrollment number, e.g.
+`cse2026-0140`), and the seeded admin/driver/parent accounts have the short
+usernames `admin`, `driver1` and `parent1`.
+
+A database that was migrated but never seeded has no admin account, which shows
+up as "there is no admin login". Create or repair one at any time:
+
+```bash
+npm run create:admin
+# or: ADMIN_EMAIL=you@college.edu ADMIN_PASSWORD='a-strong-password' npm run create:admin
+```
+
+> If login fails with a missing-column error (`P2022`) on a deployed database,
+> the username/mustChangePassword migration has not been applied. Run
+> `npx prisma migrate deploy`, or apply `migration_username.sql` by hand.
+
 The seed stamps bus positions with `lastLocationAt` at seed time, so they fall
 outside the two-minute live window a couple of minutes after seeding. Open
 `/fleet` right after seeding, or restamp:

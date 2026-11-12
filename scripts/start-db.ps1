@@ -18,20 +18,42 @@
 #   & "$env:ProgramFiles\PostgreSQL\17\bin\pg_ctl.exe" register -N "NavikaPG" `
 #       -D "C:\navika-pg" -S auto
 param(
-    [int]$Port = 5433
+    [int]$Port = 5433,
+    [string]$PgBin = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-$pgBin = Join-Path $env:ProgramFiles 'PostgreSQL\17\bin'
-$pgCtl = Join-Path $pgBin 'pg_ctl.exe'
+function Find-PgBin {
+    $candidates = @()
+    if ($PgBin) { $candidates += $PgBin }
+    if ($env:PG_BIN) { $candidates += $env:PG_BIN }
+    $candidates += 'C:\navika-pg-bin\pgsql\bin'
+    $candidates += (Join-Path $env:ProgramFiles 'PostgreSQL\18\bin')
+    $candidates += (Join-Path $env:ProgramFiles 'PostgreSQL\17\bin')
+    $candidates += (Join-Path $env:USERPROFILE 'pgsql\bin')
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path (Join-Path $candidate 'pg_ctl.exe'))) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+$pgBin = Find-PgBin
+$pgCtl = if ($pgBin) { Join-Path $pgBin 'pg_ctl.exe' } else { $null }
 $dataDir = 'C:\navika-pg'
 $logFile = Join-Path $dataDir 'server.log'
 $errFile = Join-Path $dataDir 'pg_ctl.out'
 
-if (-not (Test-Path $pgCtl)) {
-    throw "pg_ctl.exe not found at $pgCtl. Is PostgreSQL 17 installed?"
+if (-not $pgCtl -or -not (Test-Path $pgCtl)) {
+    throw @"
+pg_ctl.exe not found. Install PostgreSQL 17/18, extract the portable binaries to
+C:\navika-pg-bin\pgsql\bin, or set PG_BIN to an existing bin directory.
+"@
 }
+
 if (-not (Test-Path $dataDir)) {
     throw "Data directory $dataDir does not exist. Run scripts/setup-db.ps1 first."
 }
@@ -63,8 +85,8 @@ Write-Host "Starting BusGuard database on port $Port ..."
 #     the life of the server. Piping it (`| Out-Null`) or using -Wait blocks
 #     forever, because the pipe never sees EOF.
 #
-#  2. If this script's own shell is killed — a tool timeout, a closed terminal
-#     — the postmaster dies with it. That leaves a half-started server whose
+#  2. If this script's own shell is killed - a tool timeout, a closed terminal
+#     - the postmaster dies with it. That leaves a half-started server whose
 #     first backend fork fails with 0xC0000142, and it takes the whole cluster
 #     down on every subsequent connection. Detaching means the postmaster
 #     belongs to no shell and survives.

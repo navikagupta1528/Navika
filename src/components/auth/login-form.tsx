@@ -38,7 +38,7 @@ export function LoginForm() {
 
       <div>
         <label className="label" htmlFor="identifier">
-          Username / Roll No.
+          Email / Roll No. / Username
         </label>
         <input
           id="identifier"
@@ -46,7 +46,7 @@ export function LoginForm() {
           type="text"
           autoComplete="username"
           required
-          placeholder="25cse01 or driver01"
+          placeholder="admin, 25cse01 or you@example.com"
           className="field"
           aria-invalid={state?.errors?.email?.[0] ? true : undefined}
           aria-describedby={describedBy(

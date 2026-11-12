@@ -192,6 +192,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       email: "admin@busguard.test",
+      username: "admin",
       passwordHash,
       name: "Anita Deshpande",
       phone: "+91 98220 11001",
@@ -207,6 +208,7 @@ async function main() {
     const user = await prisma.user.create({
       data: {
         email: `driver${i + 1}@busguard.test`,
+        username: `driver${i + 1}`,
         passwordHash,
         name,
         phone: `+91 98220 2${1000 + i}`,
@@ -270,6 +272,7 @@ async function main() {
     const user = await prisma.user.create({
       data: {
         email: `${first.toLowerCase()}.${last.toLowerCase()}${i}@student.busguard.test`,
+        username: enrollmentNo.toLowerCase(),
         passwordHash,
         name,
         phone: `+91 90040 ${10000 + i}`,
@@ -298,6 +301,7 @@ async function main() {
     const user = await prisma.user.create({
       data: {
         email: `parent${i + 1}@busguard.test`,
+        username: `parent${i + 1}`,
         passwordHash,
         name: parentName,
         phone: `+91 90050 ${20000 + i}`,
@@ -430,9 +434,9 @@ async function main() {
   console.log("  · 1 open alert");
 
   console.log("\nDemo accounts (password for all: busguard123)");
-  console.log("  admin   admin@busguard.test");
-  console.log("  driver  driver1@busguard.test");
-  console.log("  parent  parent1@busguard.test");
+  console.log("  admin   admin@busguard.test   (username: admin)");
+  console.log("  driver  driver1@busguard.test (username: driver1)");
+  console.log("  parent  parent1@busguard.test (username: parent1)");
   console.log("  student aarav.sharma0@student.busguard.test");
   console.log(`\n  ${admin.name} (admin id ${admin.id})`);
   console.log("");

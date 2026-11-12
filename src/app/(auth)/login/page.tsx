@@ -10,7 +10,8 @@ export default function LoginPage() {
         Sign in to Navika
       </h1>
       <p className="mt-1 mb-6 text-sm text-slate-500">
-        Login with your Roll No. / Username and password.
+        Students: sign in with your roll number. Staff and parents: use your
+        email address or username.
       </p>
       <LoginForm />
     </div>

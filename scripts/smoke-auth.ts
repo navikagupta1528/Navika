@@ -60,9 +60,8 @@ async function main() {
 
   let pass = 0;
   let fail = 0;
-  // 3 per role, the forgery check, and 10 for the throttle (4 free attempts, the
-  // refusal, and the per-account and clear-on-success behaviour).
-  const total = CASES.length * 3 + 1 + 10;
+  // 3 per role, the forgery check, 10 for the throttle, and 2 for username login.
+  const total = CASES.length * 3 + 1 + 10 + 2;
 
   const record = (label: string, ok: boolean, detail = "") => {
     pass += check(label, ok, detail);
@@ -108,6 +107,43 @@ async function main() {
     );
   }
 
+  // Username / roll-number sign-in. The login screen advertises it, and the
+  // missing username column used to make this query throw rather than merely
+  // return "incorrect password" - so it is worth an end-to-end check.
+  const usernameStudent = await prisma.user.findFirst({
+    where: { role: Role.STUDENT, username: { not: null } },
+    select: { username: true },
+  });
+
+  const usernameCases = [
+    { role: "ADMIN", identifier: "admin", path: "/admin", mustContain: "Fleet positions" },
+    {
+      role: "STUDENT",
+      identifier: usernameStudent?.username ?? "cse2026-0140",
+      path: "/student",
+      mustContain: "Suryanagar Chowk",
+    },
+  ];
+
+  for (const c of usernameCases) {
+    try {
+      const session = await login(BASE, c.identifier, DEMO_PASSWORD);
+      const page = await session.get(c.path);
+      const text = visibleText(page.html);
+      record(
+        `${c.role}: signs in with username "${c.identifier}"`,
+        page.status === 200 && text.includes(c.mustContain),
+        `-> ${page.status}`,
+      );
+    } catch (error) {
+      record(
+        `${c.role}: signs in with username "${c.identifier}"`,
+        false,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   // A tampered cookie must not authenticate, even with a valid-looking shape.
   const forged =
     Buffer.from(JSON.stringify({ userId: "x", role: "ADMIN" })).toString("base64url") +
@@ -146,7 +182,7 @@ async function main() {
       const a = await attemptLogin(BASE, email, WRONG);
       messages.push(a.message);
     }
-    return messages.every((m) => /incorrect email or password/i.test(m));
+    return messages.every((m) => /incorrect email/i.test(m));
   };
 
   /*
@@ -160,7 +196,7 @@ async function main() {
   let stillWrong = true;
   for (let n = 1; n <= 4 && stillWrong; n++) {
     const a = await attemptLogin(BASE, absent, WRONG);
-    stillWrong = /incorrect email or password/i.test(a.message);
+    stillWrong = /incorrect email/i.test(a.message);
     record(
       `attempt ${n} for an unknown address is a wrong password, not a lock`,
       stillWrong,
