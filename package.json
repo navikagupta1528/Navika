@@ -15,6 +15,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "create:admin": "tsx scripts/create-admin.ts",
+    "verify:deploy": "node scripts/verify-deploy-migration.mjs",
     "db:reset": "prisma migrate reset --force",
     "setup:db": "powershell -ExecutionPolicy Bypass -File scripts/setup-db.ps1",
     "test": "vitest run",
