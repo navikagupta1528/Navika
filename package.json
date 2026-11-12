@@ -33,6 +33,7 @@
     "smoke:delay": "tsx --conditions=react-server scripts/smoke-delay.ts",
     "smoke:ingest": "tsx scripts/smoke-ingest.ts",
     "smoke:instrument": "tsx scripts/smoke-audit-instrumentation.ts",
+    "smoke:live": "tsx scripts/smoke-live.ts",
     "audit": "tsx scripts/audit-pages.ts",
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",

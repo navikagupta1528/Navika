@@ -23,6 +23,11 @@ const globalForPrisma = globalThis as unknown as {
 
 let cached: PrismaClient | undefined;
 
+function poolSize(): number {
+  const configured = Number(process.env.DATABASE_POOL_MAX);
+  return Number.isFinite(configured) && configured > 0 ? configured : 5;
+}
+
 function createClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -30,7 +35,22 @@ function createClient(): PrismaClient {
       "DATABASE_URL is not set. Run `npm run setup:db`, or copy .env.example to .env.",
     );
   }
-  const adapter = globalForPrisma.prismaAdapter ?? new PrismaPg({ connectionString });
+  /*
+   * A small pool on purpose. `pg` defaults to ten connections per client, and a
+   * serverless platform runs many short-lived instances of this file. A page
+   * that issues nine counts in one `Promise.all` then asks the host for nine
+   * connections at once, per instance. Supabase's pooler answered the deployed
+   * admin dashboard with "(EMAXCONNSESSION) max clients reached in session
+   * mode - max clients are limited to pool_size: 15", which surfaced as an
+   * empty page with an error digest rather than as a connection error.
+   *
+   * Five is plenty for a page render and keeps one instance from eating the
+   * host's whole allowance. Override with DATABASE_POOL_MAX if a deployment
+   * needs more.
+   */
+  const adapter =
+    globalForPrisma.prismaAdapter ??
+    new PrismaPg({ connectionString, max: poolSize() });
   if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prismaAdapter = adapter;
   }

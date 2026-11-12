@@ -539,10 +539,24 @@ migrations applied and runs `prisma migrate deploy` against it.
 
 > Supabase's direct database host (`db.<ref>.supabase.co`) is IPv6-only. On a
 > network without IPv6, use the pooler instead:
-> `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
-> The pooler presents Supabase's own CA, so pass it explicitly with
-> `sslmode=verify-full&sslrootcert=/path/to/prod-ca-2021.crt` (download it from
-> the Supabase dashboard) if your client does not trust it.
+> `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=no-verify&pgbouncer=true`.
+>
+> Two details there are not optional on a serverless host:
+>
+> - **Port 6543, not 5432.** 5432 is session mode, and it caps clients at the
+>   project's pool size (15 on a small plan). One page that runs nine counts in
+>   a `Promise.all`, across a handful of function instances, exhausts that and
+>   the page fails with `(EMAXCONNSESSION) max clients reached in session mode`.
+>   Transaction mode multiplexes, so the cap is not per instance.
+> - **`sslmode=no-verify`.** `require`, `prefer` and `verify-ca` are aliases for
+>   `verify-full` in the `pg` driver, and Supabase's CA is not in Node's trust
+>   store. `no-verify` still encrypts; it just skips CA validation. If you would
+>   rather validate, download the project CA and use
+>   `sslmode=verify-full&sslrootcert=/path/to/prod-ca-2021.crt` instead.
+>
+> `src/lib/db.ts` also caps the per-instance pool at 5 connections
+> (`DATABASE_POOL_MAX` to override), so one instance cannot consume the host's
+> whole allowance.
 
 
 The seed stamps bus positions with `lastLocationAt` at seed time, so they fall
@@ -576,6 +590,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:boarding` | The bus-left-without-your-child alert: MISSED vs ABSENT, the right guardian told, idempotent |
 | `npm run smoke:delay`    | The late-bus alert: claimed before it sends, carried in the arrival message, deduped |
 | `npm run smoke:ingest`   | A fitted tracker: bearer auth, a revoked token refused, a replayed fix rejected, the bus row written |
+| `npm run smoke:live`     | The deployed site: health, all four sign-ins, every role's screens, refusals. `-- <url>` for another host |
 | `npm run smoke:all`     | All twelve smoke suites                                   |
 | `npm run audit`         | Every route, every role, in a real browser: console, network, hydration, WCAG, layout shift |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
