@@ -2,7 +2,11 @@
  * BusGuard demo seed.
  *
  * Produces a believable small college: 3 routes, 12 stops, 5 buses, 6 drivers,
- * 40 students, 8 parents, live enrolments and a couple of trips in progress.
+ * 65 students, 8 parents, live enrolments and a couple of trips in progress.
+ *
+ * Student roll numbers are fixed and predictable on purpose: `25cse01` through
+ * `25cse65`. A demo needs a roll number someone can guess from the page, and a
+ * scheme that changes with the seed date is a scheme nobody can log in with.
  *
  *   npm run seed
  *
@@ -122,6 +126,17 @@ const LAST_NAMES = [
 ];
 
 const SCHOOL_YEAR = "2026-27";
+
+/**
+ * Roll numbers are `25cse01` … `25cse65`, lower-case, zero-padded to two
+ * digits. The login action lower-cases whatever is typed, so `25CSE01`,
+ * `25cse01` and `25Cse01` all reach the same account.
+ */
+const STUDENT_COUNT = 65;
+
+function rollNumber(index: number): string {
+  return `25cse${String(index + 1).padStart(2, "0")}`;
+}
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -260,11 +275,13 @@ async function main() {
   // -------------------------------------------------------------- students
   const usedEnrollment = new Set<string>();
   const students = [];
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < STUDENT_COUNT; i++) {
+    // Two name lists only give 30 distinct first names, so the last name is
+    // chosen per block of 30 to keep all 65 students distinguishable.
     const first = FIRST_NAMES[i % FIRST_NAMES.length];
-    const last = LAST_NAMES[(i * 3) % LAST_NAMES.length];
+    const last = LAST_NAMES[Math.floor(i / FIRST_NAMES.length) % LAST_NAMES.length];
     const name = `${first} ${last}`;
-    const enrollmentNo = `CSE${2026}-${String(140 + i).padStart(4, "0")}`;
+    const enrollmentNo = rollNumber(i);
 
     if (usedEnrollment.has(enrollmentNo)) continue;
     usedEnrollment.add(enrollmentNo);
@@ -434,10 +451,10 @@ async function main() {
   console.log("  · 1 open alert");
 
   console.log("\nDemo accounts (password for all: busguard123)");
-  console.log("  admin   admin@busguard.test   (username: admin)");
-  console.log("  driver  driver1@busguard.test (username: driver1)");
-  console.log("  parent  parent1@busguard.test (username: parent1)");
-  console.log("  student aarav.sharma0@student.busguard.test");
+  console.log("  admin   username: admin");
+  console.log("  driver  username: driver1 … driver6");
+  console.log("  parent  username: parent1 … parent8");
+  console.log("  student roll no:  25cse01 … 25cse65");
   console.log(`\n  ${admin.name} (admin id ${admin.id})`);
   console.log("");
 }

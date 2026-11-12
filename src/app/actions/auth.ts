@@ -12,6 +12,7 @@ import {
   recordSuccess,
 } from "@/lib/login-guard";
 import { registerSchema } from "@/lib/validations";
+import { normaliseEnrollmentNo } from "@/lib/enrollment";
 import { Role } from "@/generated/prisma/enums";
 
 export type AuthState = {
@@ -23,6 +24,28 @@ function flatten(error: { flatten: () => { fieldErrors: Record<string, string[] 
   return error.flatten().fieldErrors;
 }
 
+/**
+ * The sign-in pages are split by role, and each one posts its own `role` field.
+ *
+ * Enforcing it here rather than only in the UI is what makes the split real: a
+ * parent who lands on the student page is told to use the right one instead of
+ * being signed in and then bounced by the proxy, which reads as a broken login.
+ */
+const LOGIN_ROLES = ["STUDENT", "PARENT", "DRIVER", "ADMIN"] as const;
+type LoginRole = (typeof LOGIN_ROLES)[number];
+
+const ROLE_LABEL: Record<LoginRole, string> = {
+  STUDENT: "student",
+  PARENT: "parent",
+  DRIVER: "driver",
+  ADMIN: "administrator",
+};
+
+function loginRole(value: FormDataEntryValue | null): LoginRole | null {
+  const role = String(value ?? "").trim().toUpperCase();
+  return (LOGIN_ROLES as readonly string[]).includes(role) ? (role as LoginRole) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
@@ -31,8 +54,14 @@ export async function login(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const identifier = String(formData.get("email") || formData.get("username") || formData.get("identifier") || "").trim().toLowerCase();
+  const rawIdentifier = String(
+    formData.get("email") || formData.get("username") || formData.get("identifier") || "",
+  ).trim();
+  // Roll numbers are stored lower-case; emails and usernames are too. Lower-case
+  // the whole identifier so `25CSE01`, `25Cse01` and `25cse01` are one account.
+  const identifier = rawIdentifier.toLowerCase();
   const password = String(formData.get("password") || "");
+  const expectedRole = loginRole(formData.get("role"));
 
   if (!identifier || !password) {
     return { errors: { email: ["Username/Roll No. and password are required"] } };
@@ -90,6 +119,17 @@ export async function login(
     return { message: "This account has been deactivated. Contact your admin." };
   }
 
+  /*
+   * The password was right, so naming the role costs nothing: the person already
+   * knows the account exists. Refusing here is what keeps `/login`, `/login/parent`,
+   * `/login/driver` and `/login/admin` meaningful instead of decorative.
+   */
+  if (expectedRole && user.role !== expectedRole) {
+    return {
+      message: `This account is not a ${ROLE_LABEL[expectedRole]} account. Use the ${ROLE_LABEL[user.role]} sign-in page.`,
+    };
+  }
+
   await recordSuccess("login", identifier);
   const rememberMe = formData.get("rememberMe") === "1";
   await createSession({ userId: user.id, role: user.role, mustChangePassword: user.mustChangePassword }, rememberMe);
@@ -119,11 +159,11 @@ export async function register(
     confirmPassword: formData.get("confirmPassword"),
     role: formData.get("role"),
     phone: formData.get("phone") || undefined,
-    enrollmentNo: formData.get("enrollmentNo") || undefined,
+    enrollmentNo: normaliseEnrollmentNo(formData.get("enrollmentNo")) || undefined,
     department: formData.get("department") || undefined,
     yearOfStudy: formData.get("yearOfStudy") || undefined,
     relation: formData.get("relation") || undefined,
-    childEnrollmentNo: formData.get("childEnrollmentNo") || undefined,
+    childEnrollmentNo: normaliseEnrollmentNo(formData.get("childEnrollmentNo")) || undefined,
   });
 
   if (!parsed.success) {

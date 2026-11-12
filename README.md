@@ -33,7 +33,7 @@ pages, 38 routes building.**
   field by `aria-describedby`
 - Role-gated dashboards for student, parent, driver and admin
 - Socket.IO attached to a custom Node server, with cookie-based handshake
-- Demo seed: 3 routes, 12 stops, 5 buses, 6 drivers, 40 students, 8 parents,
+- Demo seed: 3 routes, 12 stops, 5 buses, 6 drivers, 65 students, 8 parents,
   two live trips
 
 **Phase 1 - CRUD, trips and attendance**
@@ -498,9 +498,15 @@ Password for all of them: `busguard123`
 | Parent  | `parent1@busguard.test`               |
 | Student | `aarav.sharma0@student.busguard.test` |
 
-Students can also sign in with their roll number (the enrollment number, e.g.
-`cse2026-0140`), and the seeded admin/driver/parent accounts have the short
-usernames `admin`, `driver1` and `parent1`.
+Students sign in with their roll number: `25cse01` through `25cse65`. Case does
+not matter - `25CSE01`, `25Cse01` and `25cse01` all reach the same account - and
+the seeded admin, driver and parent accounts have the short usernames `admin`,
+`driver1` … `driver6` and `parent1` … `parent8`.
+
+Each audience has its own sign-in page: `/login` (students), `/login/parent`,
+`/login/driver`, and `/login/admin`. The admin page is linked from the site
+footer rather than from the other three, and each page refuses a password that
+belongs to another role.
 
 A database that was migrated but never seeded has no admin account, which shows
 up as "there is no admin login". Create or repair one at any time:

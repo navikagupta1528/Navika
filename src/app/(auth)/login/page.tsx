@@ -1,19 +1,9 @@
 import type { Metadata } from "next";
-import { LoginForm } from "@/components/auth/login-form";
 
-export const metadata: Metadata = { title: "Sign in" };
+import { RoleLogin } from "@/components/auth/role-login";
+
+export const metadata: Metadata = { title: "Student sign in" };
 
 export default function LoginPage() {
-  return (
-    <div>
-      <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-        Sign in to Navika
-      </h1>
-      <p className="mt-1 mb-6 text-sm text-slate-500">
-        Students: sign in with your roll number. Staff and parents: use your
-        email address or username.
-      </p>
-      <LoginForm />
-    </div>
-  );
+  return <RoleLogin role="STUDENT" />;
 }

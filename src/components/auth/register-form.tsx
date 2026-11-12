@@ -129,14 +129,17 @@ export function RegisterForm() {
         <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
           <div>
             <label className="label" htmlFor="enrollmentNo">
-              Enrollment number
+              Roll number
             </label>
             <input
               id="enrollmentNo"
               name="enrollmentNo"
               required
               className="field"
-              placeholder="CSE2026-0142"
+              placeholder="25cse01"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               aria-invalid={err("enrollmentNo") ? true : undefined}
               aria-describedby={describedBy(
                 err("enrollmentNo") ? "enrollmentNo-error" : undefined,
@@ -182,7 +185,7 @@ export function RegisterForm() {
               name="childEnrollmentNo"
               required
               className="field"
-              placeholder="CSE2026-0142"
+              placeholder="25cse01"
               aria-invalid={err("childEnrollmentNo") ? true : undefined}
               aria-describedby={describedBy(
                 "childEnrollmentNo-hint",

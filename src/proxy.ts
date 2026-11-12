@@ -60,7 +60,22 @@ const PROTECTED_AREAS: { prefix: string; roles: string[] }[] = [
   { prefix: "/notifications", roles: ALL_ROLES },
   { prefix: "/install", roles: ALL_ROLES },
 ];
+/**
+ * Pages an anonymous visitor may open, and which a signed-in visitor is bounced
+ * away from.
+ *
+ * Matched as prefixes, not exact strings: `/login`, `/login/parent`,
+ * `/login/driver` and `/login/admin` are four separate routes and all of them
+ * have to count. Comparing exactly meant `/login/parent` fell through every
+ * branch and a signed-in parent could sit on a sign-in form.
+ */
 const AUTH_ROUTES = ["/login", "/register"];
+
+function isAuthRoute(pathname: string): boolean {
+  return AUTH_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}
 
 /**
  * The public landing page at `/`.
@@ -112,10 +127,10 @@ export async function proxy(request: NextRequest) {
     .find(
       ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
-  const isAuthRoute = AUTH_ROUTES.includes(pathname);
+  const isAuthRoutePath = isAuthRoute(pathname);
   const isLanding = pathname === PUBLIC_LANDING;
 
-  if (!area && !isAuthRoute && !isLanding) {
+  if (!area && !isAuthRoutePath && !isLanding) {
     return NextResponse.next();
   }
 
@@ -156,7 +171,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 
-  if (isAuthRoute && session) {
+  if (isAuthRoutePath && session) {
     return NextResponse.redirect(new URL(homeFor(session.role), request.url));
   }
 

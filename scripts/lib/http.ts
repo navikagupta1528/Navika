@@ -129,6 +129,27 @@ export type LoginAttempt = {
 };
 
 /**
+ * Which sign-in route a role posts to.
+ *
+ * The app has four of them, and each one sends its own `role` field which the
+ * Server Action enforces. Posting a parent's credentials to `/login` is now a
+ * refusal, not a login, so a helper that always used `/login` would report every
+ * non-student account as broken.
+ */
+export function loginPathForRole(role: string): string {
+  switch (role.toUpperCase()) {
+    case "ADMIN":
+      return "/login/admin";
+    case "DRIVER":
+      return "/login/driver";
+    case "PARENT":
+      return "/login/parent";
+    default:
+      return "/login";
+  }
+}
+
+/**
  * Post the sign-in form once and report what happened.
  *
  * Separate from `login` because "log in and throw if it failed" is the wrong
@@ -145,19 +166,22 @@ export async function attemptLogin(
   base: string,
   email: string,
   password: string,
+  role?: string,
 ): Promise<LoginAttempt> {
-  const page = await fetch(`${base}/login`);
+  const path = role ? loginPathForRole(role) : "/login";
+  const page = await fetch(`${base}${path}`);
   const html = await page.text();
 
   const form = forms(html).find((f) => f.text.toLowerCase().includes("sign in"));
-  if (!form) throw new Error(`no sign-in form at ${base}/login`);
+  if (!form) throw new Error(`no sign-in form at ${base}${path}`);
 
   const body = new FormData();
   actionFields(form.raw, body);
   body.set("email", email);
   body.set("password", password);
+  if (role) body.set("role", role.toUpperCase());
 
-  const res = await fetch(`${base}/login`, {
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
     body,
     redirect: "manual",
@@ -186,8 +210,9 @@ export async function login(
   base: string,
   email: string,
   password: string = DEMO_PASSWORD,
+  role?: string,
 ): Promise<Session> {
-  const attempt = await attemptLogin(base, email, password);
+  const attempt = await attemptLogin(base, email, password, role);
 
   if (!attempt.cookie) {
     throw new Error(

@@ -560,6 +560,17 @@ function SiteFooter() {
           >
             Create account
           </Link>
+          {/*
+            The administrator door lives here rather than on the sign-in screen.
+            The three everyday audiences should not have to read past an option
+            they will never use, and the transport office knows where to look.
+          */}
+          <Link
+            href="/login/admin"
+            className="busguard-underline text-sm font-medium text-slate-500 hover:text-slate-900"
+          >
+            Admin
+          </Link>
         </nav>
 
         <p className="text-xs text-slate-500">

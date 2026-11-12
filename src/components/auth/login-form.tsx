@@ -8,7 +8,41 @@ import { FieldError, describedBy } from "./field-error";
 import { Spinner } from "@/components/ui/primitives";
 import { Eye, EyeOff } from "lucide-react";
 
-function SubmitButton() {
+/**
+ * Each sign-in page is a separate route and posts its own role.
+ *
+ * The action refuses a password that belongs to another role, so the split is
+ * enforced rather than cosmetic - see `login` in `src/app/actions/auth.ts`.
+ */
+export type LoginRole = "STUDENT" | "PARENT" | "DRIVER" | "ADMIN";
+
+const COPY: Record<
+  LoginRole,
+  { label: string; placeholder: string; hint: string }
+> = {
+  STUDENT: {
+    label: "Roll number",
+    placeholder: "25cse01",
+    hint: "Your roll number, e.g. 25cse01. Upper or lower case both work.",
+  },
+  PARENT: {
+    label: "Username or email",
+    placeholder: "parent1",
+    hint: "The username your college gave you (parent1 … parent8), or your email address.",
+  },
+  DRIVER: {
+    label: "Username or email",
+    placeholder: "driver1",
+    hint: "The driver username your transport office gave you, or your email address.",
+  },
+  ADMIN: {
+    label: "Username or email",
+    placeholder: "admin",
+    hint: "Transport office staff only.",
+  },
+};
+
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
@@ -18,18 +52,21 @@ function SubmitButton() {
           Signing in…
         </>
       ) : (
-        "Sign in"
+        label
       )}
     </button>
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ role = "STUDENT" }: { role?: LoginRole }) {
   const [state, formAction] = useActionState<AuthState, FormData>(login, undefined);
   const [showPassword, setShowPassword] = useState(false);
+  const copy = COPY[role];
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="role" value={role} />
+
       {state?.message ? (
         <p role="alert" className="alert-error">
           {state.message}
@@ -38,21 +75,28 @@ export function LoginForm() {
 
       <div>
         <label className="label" htmlFor="identifier">
-          Email / Roll No. / Username
+          {copy.label}
         </label>
         <input
           id="identifier"
           name="email"
           type="text"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
-          placeholder="admin, 25cse01 or you@example.com"
+          placeholder={copy.placeholder}
           className="field"
           aria-invalid={state?.errors?.email?.[0] ? true : undefined}
           aria-describedby={describedBy(
+            "identifier-hint",
             state?.errors?.email?.[0] ? "email-error" : undefined,
           )}
         />
+        <p id="identifier-hint" className="mt-1 text-xs text-slate-500">
+          {copy.hint}
+        </p>
         <FieldError id="email-error" message={state?.errors?.email?.[0]} />
       </div>
 
@@ -90,14 +134,16 @@ export function LoginForm() {
         Remember me
       </label>
 
-      <SubmitButton />
+      <SubmitButton label={role === "ADMIN" ? "Sign in to admin" : "Sign in"} />
 
-      <p className="text-center text-sm text-slate-600">
-        No account yet?{" "}
-        <Link href="/register" className="font-medium text-brand-700 hover:underline">
-          Register as student or parent
-        </Link>
-      </p>
+      {role === "STUDENT" ? (
+        <p className="text-center text-sm text-slate-600">
+          No account yet?{" "}
+          <Link href="/register" className="font-medium text-brand-700 hover:underline">
+            Register as student or parent
+          </Link>
+        </p>
+      ) : null}
     </form>
   );
 }

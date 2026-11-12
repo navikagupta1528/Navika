@@ -60,8 +60,9 @@ async function main() {
 
   let pass = 0;
   let fail = 0;
-  // 3 per role, the forgery check, 10 for the throttle, and 2 for username login.
-  const total = CASES.length * 3 + 1 + 10 + 2;
+  // 3 per role, the forgery check, 10 for the throttle, and 4 for username /
+  // roll-number / case / wrong-door sign-in.
+  const total = CASES.length * 3 + 1 + 10 + 4;
 
   const record = (label: string, ok: boolean, detail = "") => {
     pass += check(label, ok, detail);
@@ -85,7 +86,7 @@ async function main() {
     // one bad account from aborting the suite and taking the other three with it.
     let session;
     try {
-      session = await login(BASE, c.email, DEMO_PASSWORD);
+      session = await login(BASE, c.email, DEMO_PASSWORD, c.role);
     } catch (error) {
       record(
         `${c.role}: login sets a session cookie`,
@@ -119,7 +120,7 @@ async function main() {
     { role: "ADMIN", identifier: "admin", path: "/admin", mustContain: "Fleet positions" },
     {
       role: "STUDENT",
-      identifier: usernameStudent?.username ?? "cse2026-0140",
+      identifier: usernameStudent?.username ?? "25cse01",
       path: "/student",
       mustContain: "Suryanagar Chowk",
     },
@@ -127,7 +128,7 @@ async function main() {
 
   for (const c of usernameCases) {
     try {
-      const session = await login(BASE, c.identifier, DEMO_PASSWORD);
+      const session = await login(BASE, c.identifier, DEMO_PASSWORD, c.role);
       const page = await session.get(c.path);
       const text = visibleText(page.html);
       record(
@@ -143,6 +144,31 @@ async function main() {
       );
     }
   }
+
+  /*
+   * Roll numbers are stored lower-case, but a roll number is read off an ID card
+   * and typed the way the card prints it. `25CSE01` has to reach the same account
+   * as `25cse01`, and this is the only place that proves the lower-casing happens
+   * on both sides of the comparison.
+   */
+  const upper = await attemptLogin(BASE, "25CSE01", DEMO_PASSWORD, "STUDENT");
+  record(
+    "roll number signs in regardless of case (25CSE01)",
+    Boolean(upper.cookie),
+    `cookie: ${Boolean(upper.cookie)}`,
+  );
+
+  /*
+   * Each sign-in page is for one role. A correct parent password on the student
+   * page must be refused with an explanation, not silently signed in and then
+   * bounced by the proxy - that reads as "login is broken".
+   */
+  const wrongDoor = await attemptLogin(BASE, "parent1@busguard.test", DEMO_PASSWORD, "STUDENT");
+  record(
+    "a parent password is refused on the student sign-in page",
+    !wrongDoor.cookie && /not a student account/i.test(wrongDoor.message),
+    `"${wrongDoor.message}"`,
+  );
 
   // A tampered cookie must not authenticate, even with a valid-looking shape.
   const forged =

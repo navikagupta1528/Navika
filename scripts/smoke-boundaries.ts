@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     `-> ${landing.status}`,
   );
   report(
-    visibleText(await landing.text()).includes("Know exactly where the bus is"),
+    visibleText(await landing.text()).includes("Know where the bus is"),
     "the landing page renders its headline",
   );
 
