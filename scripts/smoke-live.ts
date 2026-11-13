@@ -207,6 +207,87 @@ async function main() {
     wrongPassword.message,
   );
 
+  section("public pages");
+
+  for (const path of ["/", "/register", "/manifest.webmanifest"]) {
+    const res = await fetch(`${BASE}${path}`);
+    const html = await res.text();
+    record(`${path} renders`, res.status === 200 && !pageThrew(html), `-> ${res.status}`);
+  }
+
+  section("live tracking and exports");
+
+  const parent = sessions.PARENT;
+  if (!parent) {
+    record("tracking page skipped (no parent session)", false);
+  } else {
+    const fleetLink = (html: string) => html.match(/href="(\/track\/[A-Za-z0-9_-]+)"/);
+
+    let fleet = await parent.get("/fleet");
+    let link = fleetLink(fleet.html);
+
+    /*
+     * The seed stamps every bus with `lastLocationAt` at seed time, and the map
+     * only shows a bus that reported in the last two minutes. A deployment
+     * seeded an hour ago therefore has an honestly empty fleet, and looking for
+     * a follow link would fail for a reason that is not a bug.
+     *
+     * So publish one position as a driver first - exactly what the driver app
+     * posts - and look again. This is the only write in this suite, it is
+     * idempotent, and it exercises the whole driver-to-parent path rather than
+     * just the read side.
+     */
+    if (!link) {
+      for (const name of ["driver1", "driver2", "driver3", "driver4", "driver5", "driver6"]) {
+        let driverSession;
+        try {
+          driverSession = await login(BASE, name, DEMO_PASSWORD, "DRIVER");
+        } catch {
+          continue;
+        }
+        const ping = await fetch(`${BASE}/api/driver/location`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: driverSession.cookie },
+          body: JSON.stringify({ lat: 18.5204, lng: 73.8567, speedKph: 28 }),
+        });
+        if (ping.status !== 200) continue;
+        fleet = await parent.get("/fleet");
+        link = fleetLink(fleet.html);
+        if (link) break;
+      }
+    }
+
+    record("the parent's fleet page links a bus they may open", Boolean(link), link?.[1] ?? "no link");
+
+    if (link) {
+      const track = await parent.get(link[1]);
+      record(
+        `${link[1]} renders live tracking`,
+        track.status === 200 && !pageThrew(track.html) && track.html.includes("Live tracking"),
+        `-> ${track.status}, ${track.html.length} bytes`,
+      );
+    }
+  }
+
+  const admin = sessions.ADMIN;
+  if (!admin) {
+    record("CSV export skipped (no admin session)", false);
+  } else {
+    const csv = await admin.get("/api/admin/reports/attendance.csv?from=2026-09-01&to=2026-12-31");
+    const type = csv.headers.get("content-type") ?? "";
+    record(
+      "an admin's attendance export is a CSV",
+      csv.status === 200 && type.includes("text/csv") && !csv.html.includes("<html"),
+      `-> ${csv.status}, ${type}`,
+    );
+  }
+
+  const driver = sessions.DRIVER;
+  if (driver) {
+    const denied = await driver.get("/api/admin/reports/attendance.csv?from=2026-09-01&to=2026-12-31");
+    record("a driver is refused the attendance export", denied.status === 403, `-> ${denied.status}`);
+  }
+
   section("a signed-in role cannot open another role's area");
 
   for (const boundary of BOUNDARIES) {
