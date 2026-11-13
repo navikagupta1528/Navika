@@ -144,6 +144,18 @@ export async function login(
 const DUMMY_HASH =
   "$2a$12$C6UzMDM.H6dfI/f/IKcEeO1cYl1F1Y0Y0Y0Y0Y0Y0Y0Y0Y0Y0Y0Y0Y";
 
+/**
+ * Is this a roster row that nobody has claimed yet?
+ *
+ * `.test` is reserved by RFC 2606: mail to it cannot be delivered, so only a
+ * seed or a demo fixture can have created the address. Real registrations use a
+ * real address, which is what makes the claim path safe to run - see the long
+ * note in `register`.
+ */
+function isPlaceholderAccount(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(".test");
+}
+
 // ---------------------------------------------------------------------------
 // Register — students and parents only
 // ---------------------------------------------------------------------------
@@ -199,25 +211,87 @@ export async function register(
   });
   if (existing) {
     await recordFailure("register", data.email);
-    return { errors: { email: ["An account with this email already exists"] } };
+    return {
+      errors: {
+        email: ["An account with this email already exists. Sign in instead."],
+      },
+    };
   }
 
   const passwordHash = await hashPassword(data.password);
   const role = data.role === "PARENT" ? Role.PARENT : Role.STUDENT;
 
-  if (role === Role.STUDENT) {
-    const taken = await prisma.studentProfile.findUnique({
-      where: { enrollmentNo: data.enrollmentNo },
-      select: { id: true },
+  /*
+   * A roll number can already exist before the student registers.
+   *
+   * The college office builds the roster first: the seed, and a real transport
+   * office, create a StudentProfile per roll number so buses, stops and parents
+   * can be assigned before anyone signs in. Treating that row as "already
+   * registered" made self-registration impossible for every student who was on
+   * the roster - which is all of them - and the message pointed at an account
+   * the student had never created.
+   *
+   * So an unclaimed roster row is claimed instead of refused: the student's own
+   * name, email and password are written onto that row, which keeps the
+   * enrolments and parent links the office already set up.
+   *
+   * "Unclaimed" has to be checkable. It is the address: `.test` is reserved by
+   * RFC 2606 and mail there cannot be delivered, so an address ending in it can
+   * only have come from a seed or demo fixture. A real registration always has
+   * a real address, so this path can never overwrite one. Once claimed, the row
+   * stops being a placeholder and a second attempt is refused.
+   */
+  const existingStudent =
+    role === Role.STUDENT
+      ? await prisma.studentProfile.findUnique({
+          where: { enrollmentNo: data.enrollmentNo },
+          select: {
+            id: true,
+            userId: true,
+            user: { select: { email: true } },
+          },
+        })
+      : null;
+
+  const claimable = existingStudent
+    ? isPlaceholderAccount(existingStudent.user.email)
+    : false;
+
+  if (existingStudent && !claimable) {
+    // Also an oracle: enrollment numbers are sequential, so an unthrottled walk
+    // of them is a walk of the whole student body.
+    await recordFailure("register", data.email);
+    return {
+      errors: {
+        enrollmentNo: [
+          `Roll number ${data.enrollmentNo} already has an account. Sign in with it instead.`,
+        ],
+      },
+    };
+  }
+
+  if (existingStudent && claimable) {
+    await prisma.user.update({
+      where: { id: existingStudent.userId },
+      data: {
+        name: data.name,
+        email: data.email,
+        passwordHash,
+        phone: data.phone || null,
+        // Sign-in lower-cases the roll number, so store it the same way.
+        username: data.enrollmentNo.toLowerCase(),
+        studentProfile: {
+          update: {
+            department: data.department || null,
+            yearOfStudy: data.yearOfStudy ?? null,
+          },
+        },
+      },
     });
-    if (taken) {
-      // Also an oracle: enrollment numbers are sequential, so an unthrottled walk
-      // of them is a walk of the whole student body.
-      await recordFailure("register", data.email);
-      return {
-        errors: { enrollmentNo: ["This enrollment number is already registered"] },
-      };
-    }
+
+    await recordSuccess("register", data.email);
+    await createSession({ userId: existingStudent.userId, role: Role.STUDENT });
+    redirect(homeForRole(Role.STUDENT));
   }
 
   const child =
@@ -233,7 +307,7 @@ export async function register(
     return {
       errors: {
         childEnrollmentNo: [
-          "No student found with that enrollment number. Ask your college office to add the student first.",
+          `No student found with roll number ${data.childEnrollmentNo}. Ask your college office to add the student first.`,
         ],
       },
     };

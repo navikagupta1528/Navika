@@ -111,8 +111,12 @@ async function main() {
   // Username / roll-number sign-in. The login screen advertises it, and the
   // missing username column used to make this query throw rather than merely
   // return "incorrect password" - so it is worth an end-to-end check.
-  const usernameStudent = await prisma.user.findFirst({
-    where: { role: Role.STUDENT, username: { not: null } },
+  //
+  // Pinned to 25cse01 rather than "the first student row": `findFirst` has no
+  // order, and after a re-seed it can return any student, whose dashboard shows
+  // a different stop than the one asserted below.
+  const usernameStudent = await prisma.user.findUnique({
+    where: { username: "25cse01" },
     select: { username: true },
   });
 

@@ -68,6 +68,24 @@ export function errorText(html: string): string {
     .join(" | ");
 }
 
+/**
+ * Messages rendered by `FieldError`, keyed by the field they belong to.
+ *
+ * `errorText` only reads `role="alert"`, and field errors are deliberately not
+ * live regions - they are announced through `aria-describedby` when the user
+ * returns to the input. That makes them invisible to `errorText`, which is fine
+ * for sign-in (its failures are form-level) and useless for registration, where
+ * every rejection is a field error.
+ */
+export function fieldErrors(html: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of html.matchAll(/<p[^>]*id="([^"]+)-error"[^>]*>([\s\S]*?)<\/p>/g)) {
+    const key = m[1] ?? "";
+    if (key) out[key] = visibleText(m[2] ?? "");
+  }
+  return out;
+}
+
 /** All forms on a page, with both the raw markup and the visible text. */
 export function forms(html: string): { text: string; raw: string }[] {
   return [...html.matchAll(/<form[\s\S]*?<\/form>/g)].map((m) => ({
@@ -89,6 +107,43 @@ function actionFields(form: string, body: FormData): void {
     if (!name.startsWith("$ACTION")) continue;
     body.set(name, decodeEntities(tag.match(/value="([^"]*)"/)?.[1] ?? ""));
   }
+}
+
+/**
+ * Replay a Server Action form without a session.
+ *
+ * Registration is the only public form that writes, so it needs the same
+ * form-replay plumbing the signed-in screens use, minus the cookie. Kept
+ * separate from `login` because a registration attempt has three legitimate
+ * outcomes - created, rejected with a field error, or refused - and the caller
+ * has to be able to tell them apart.
+ */
+export async function submitAnonymous(
+  base: string,
+  path: string,
+  marker: string,
+  values: Record<string, string>,
+): Promise<{ status: number; html: string; location: string; headers: Headers }> {
+  const page = await fetch(`${base}${path}`);
+  const pageHtml = await page.text();
+  const target = forms(pageHtml).find((f) => f.text.includes(marker));
+  if (!target) throw new Error(`no form containing "${marker}" on ${path}`);
+
+  const body = new FormData();
+  actionFields(target.raw, body);
+  for (const [k, v] of Object.entries(values)) body.set(k, v);
+
+  const res = await fetch(`${base}${path}`, {
+    method: "POST",
+    body,
+    redirect: "manual",
+  });
+  return {
+    status: res.status,
+    html: await res.text(),
+    location: res.headers.get("location") ?? "",
+    headers: res.headers,
+  };
 }
 
 /** A session cookie, and a `fetch` that carries it. */

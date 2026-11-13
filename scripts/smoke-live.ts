@@ -215,6 +215,20 @@ async function main() {
     record(`${path} renders`, res.status === 200 && !pageThrew(html), `-> ${res.status}`);
   }
 
+  /*
+   * The registration form is the one place a password is typed twice, and it
+   * shipped without the reveal toggle the sign-in form has had all along. The
+   * buttons are in the server-rendered markup, so their absence is checkable
+   * without a browser.
+   */
+  const registerPage = await (await fetch(`${BASE}/register`)).text();
+  const toggles = [...registerPage.matchAll(/aria-label="Show [^"]*"/g)].length;
+  record(
+    "the registration form has a show-password toggle per password field",
+    toggles >= 2,
+    `${toggles} toggle(s)`,
+  );
+
   section("live tracking and exports");
 
   const parent = sessions.PARENT;

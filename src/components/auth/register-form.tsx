@@ -6,6 +6,69 @@ import { useFormStatus } from "react-dom";
 import { register, type AuthState } from "@/app/actions/auth";
 import { FieldError, FieldHint, describedBy } from "./field-error";
 import { Spinner } from "@/components/ui/primitives";
+import { Eye, EyeOff } from "lucide-react";
+
+/**
+ * A password input with a show/hide toggle.
+ *
+ * The sign-in form has had this since it was written; the registration form did
+ * not, which is the worst place to leave it out: this is the one screen where a
+ * person types a password twice and has no idea what they typed either time.
+ * Both fields get their own toggle and their own state, because revealing the
+ * password should not also reveal the confirmation.
+ */
+function PasswordField({
+  id,
+  name,
+  label,
+  autoComplete,
+  hint,
+  error,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  autoComplete: string;
+  hint?: string;
+  error?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const action = label.toLowerCase();
+
+  return (
+    <div>
+      <label className="label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          name={name}
+          type={visible ? "text" : "password"}
+          required
+          className="field pr-10"
+          autoComplete={autoComplete}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(
+            hint ? `${id}-hint` : undefined,
+            error ? `${id}-error` : undefined,
+          )}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-700"
+          aria-label={visible ? `Hide ${action}` : `Show ${action}`}
+          aria-pressed={visible}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      {hint ? <FieldHint id={`${id}-hint`}>{hint}</FieldHint> : null}
+      <FieldError id={`${id}-error`} message={error} />
+    </div>
+  );
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -142,9 +205,14 @@ export function RegisterForm() {
               spellCheck={false}
               aria-invalid={err("enrollmentNo") ? true : undefined}
               aria-describedby={describedBy(
+                "enrollmentNo-hint",
                 err("enrollmentNo") ? "enrollmentNo-error" : undefined,
               )}
             />
+            <FieldHint id="enrollmentNo-hint">
+              If the college office already put you on the roster, this links
+              your account to it.
+            </FieldHint>
             <FieldError id="enrollmentNo-error" message={err("enrollmentNo")} />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -217,47 +285,22 @@ export function RegisterForm() {
         </div>
       )}
 
-      <div>
-        <label className="label" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          className="field"
-          autoComplete="new-password"
-          aria-invalid={err("password") ? true : undefined}
-          aria-describedby={describedBy(
-            "password-hint",
-            err("password") ? "password-error" : undefined,
-          )}
-        />
-        <FieldHint id="password-hint">
-          At least 8 characters, with a letter and a number.
-        </FieldHint>
-        <FieldError id="password-error" message={err("password")} />
-      </div>
+      <PasswordField
+        id="password"
+        name="password"
+        label="Password"
+        autoComplete="new-password"
+        hint="At least 8 characters, with a letter and a number."
+        error={err("password")}
+      />
 
-      <div>
-        <label className="label" htmlFor="confirmPassword">
-          Confirm password
-        </label>
-        <input
-          id="confirmPassword"
-          name="confirmPassword"
-          type="password"
-          required
-          className="field"
-          autoComplete="new-password"
-          aria-invalid={err("confirmPassword") ? true : undefined}
-          aria-describedby={describedBy(
-            err("confirmPassword") ? "confirmPassword-error" : undefined,
-          )}
-        />
-        <FieldError id="confirmPassword-error" message={err("confirmPassword")} />
-      </div>
+      <PasswordField
+        id="confirmPassword"
+        name="confirmPassword"
+        label="Confirm password"
+        autoComplete="new-password"
+        error={err("confirmPassword")}
+      />
 
       <SubmitButton />
 

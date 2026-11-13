@@ -16,8 +16,8 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 526 unit tests, 297 HTTP smoke
-checks across twelve suites, Lighthouse 98 / 100 / 100 / 100 on all three public
+Current state: **typecheck and lint clean, 526 unit tests, 308 HTTP smoke
+checks across thirteen suites, Lighthouse 98 / 100 / 100 / 100 on all three public
 pages, 38 routes building.**
 
 **Phase 0 - foundation**
@@ -508,6 +508,16 @@ Each audience has its own sign-in page: `/login` (students), `/login/parent`,
 footer rather than from the other three, and each page refuses a password that
 belongs to another role.
 
+Self-registration (`/register`) is for students and parents. A student whose roll
+number is already on the roster - which is the normal case, because the transport
+office builds the roster before anyone signs in - *claims* that row: their name,
+email and password are written onto it, and the enrolments and parent links the
+office set up are kept. A row counts as unclaimed while its address ends in
+`.test`, the TLD RFC 2606 reserves for testing; a real registration has a real
+address, so claiming can never overwrite one. A second attempt on a claimed roll
+number is refused with a message naming it. Registration is exercised end to end
+by `npm run smoke:register`.
+
 A database that was migrated but never seeded has no admin account, which shows
 up as "there is no admin login". Create or repair one at any time:
 
@@ -580,6 +590,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run verify`        | typecheck + lint + test + build                          |
 | `npm run smoke`         | Realtime handshake against a running server              |
 | `npm run smoke:auth`    | Log in as every role, check the dashboards render        |
+| `npm run smoke:register`| Claim a roster roll number, create a new one, refusals   |
 | `npm run smoke:admin`   | Admin CRUD and trip lifecycle against a running server   |
 | `npm run smoke:tracking`| Tracking, attendance, alerts, notifications              |
 | `npm run smoke:reconcile` | Plant real rows, prove abandoned trips close and live ones don't |
@@ -591,7 +602,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run smoke:delay`    | The late-bus alert: claimed before it sends, carried in the arrival message, deduped |
 | `npm run smoke:ingest`   | A fitted tracker: bearer auth, a revoked token refused, a replayed fix rejected, the bus row written |
 | `npm run smoke:live`     | The deployed site: health, all four sign-ins, every role's screens, refusals. `-- <url>` for another host |
-| `npm run smoke:all`     | All twelve smoke suites                                   |
+| `npm run smoke:all`     | All thirteen smoke suites                                 |
 | `npm run audit`         | Every route, every role, in a real browser: console, network, hydration, WCAG, layout shift |
 | `npm run map:tour`      | Walk every route through the map renderer, offscreen     |
 | `npm run check:osrm`    | Is the configured OSRM server reachable and sane?        |
@@ -756,7 +767,7 @@ prisma/
 scripts/
   setup-db.ps1           one-time database provisioning
   start-db.ps1           start the local cluster; `npm run dev` calls it first
-  smoke-*.ts             twelve HTTP suites against a running server
+  smoke-*.ts             thirteen HTTP suites against a running server
   smoke-reconcile.ts     abandoned-trip reconciliation, on real rows
   smoke-boundaries.ts    route and role boundaries, end to end
   map-tour.ts            offscreen render of every route
@@ -862,7 +873,7 @@ deliberately import nothing from the database, the network or the DOM, which is
 what makes them testable at all — and is why they use relative sibling imports
 rather than `@/lib/...`, because Vitest has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 297 checks over twelve suites) run against a
+**Smoke suites** (`npm run smoke:all`, 308 checks over thirteen suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 

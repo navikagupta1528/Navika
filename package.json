@@ -23,6 +23,7 @@
     "setup": "npm run setup:db && npm run db:migrate && npm run db:seed",
     "smoke": "tsx scripts/smoke-socket.ts",
     "smoke:auth": "tsx scripts/smoke-auth.ts",
+    "smoke:register": "tsx scripts/smoke-register.ts",
     "smoke:admin": "tsx scripts/smoke-admin.ts",
     "smoke:tracking": "tsx --conditions=react-server scripts/smoke-tracking.ts",
     "smoke:reconcile": "tsx --conditions=react-server scripts/smoke-reconcile.ts",
@@ -38,7 +39,7 @@
     "check:osrm": "tsx --conditions=react-server scripts/check-osrm.ts",
     "map:tour": "tsx --conditions=react-server scripts/map-tour.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-db.ps1",
-    "smoke:all": "npm run smoke:instrument && npm run smoke && npm run smoke:auth && npm run smoke:admin && npm run smoke:tracking && npm run smoke:reconcile && npm run smoke:boundaries && npm run smoke:pagination && npm run smoke:geofence && npm run smoke:boarding && npm run smoke:delay && npm run smoke:ingest",
+    "smoke:all": "npm run smoke:instrument && npm run smoke && npm run smoke:auth && npm run smoke:register && npm run smoke:admin && npm run smoke:tracking && npm run smoke:reconcile && npm run smoke:boundaries && npm run smoke:pagination && npm run smoke:geofence && npm run smoke:boarding && npm run smoke:delay && npm run smoke:ingest",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "lighthouse": "node scripts/lighthouse.mjs"
   },
