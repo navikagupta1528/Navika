@@ -21,7 +21,14 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { Role } from "../src/generated/prisma/enums";
-import { attemptLogin, fieldErrors, resolveBase, submitAnonymous } from "./lib/http";
+import {
+  DEMO_PASSWORD,
+  attemptLogin,
+  fieldErrors,
+  login,
+  resolveBase,
+  submitAnonymous,
+} from "./lib/http";
 
 const BASE = resolveBase();
 const STAMP = `${Date.now().toString(36)}${Math.floor(Math.random() * 1_000)}`;
@@ -171,6 +178,25 @@ async function main() {
       JSON.stringify(newRow),
     );
     if (newRow) createdUserIds.push(newRow.user.id);
+
+    /* The complaint that started this was "it says already exists, and the
+     * student is not in admin either". Prove the second half: an admin can find
+     * the student they just created. */
+    try {
+      const admin = await login(BASE, "admin", DEMO_PASSWORD, "ADMIN");
+      const list = await admin.get(`/admin/students?q=${encodeURIComponent(newRoll)}`);
+      record(
+        "the registered student appears in the admin student list",
+        list.status === 200 && list.html.includes("New Student") && list.html.includes(newRoll),
+        `-> ${list.status}, ${list.html.length} bytes`,
+      );
+    } catch (error) {
+      record(
+        "the registered student appears in the admin student list",
+        false,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
 
     /* Duplicate email is a field error on the email input, not a crash and not
      * a blank page. */

@@ -16,7 +16,7 @@ built in order, then four further areas landed on top of them after the
 roadmap was first met; those are listed under **Beyond the roadmap** rather than
 folded into the phase they relate to.
 
-Current state: **typecheck and lint clean, 526 unit tests, 308 HTTP smoke
+Current state: **typecheck and lint clean, 526 unit tests, 309 HTTP smoke
 checks across thirteen suites, Lighthouse 98 / 100 / 100 / 100 on all three public
 pages, 38 routes building.**
 
@@ -590,7 +590,7 @@ npm run db:seed && npm run smoke:tracking
 | `npm run verify`        | typecheck + lint + test + build                          |
 | `npm run smoke`         | Realtime handshake against a running server              |
 | `npm run smoke:auth`    | Log in as every role, check the dashboards render        |
-| `npm run smoke:register`| Claim a roster roll number, create a new one, refusals   |
+| `npm run smoke:register`| Claim a roster roll number, create a new one, refusals, admin list |
 | `npm run smoke:admin`   | Admin CRUD and trip lifecycle against a running server   |
 | `npm run smoke:tracking`| Tracking, attendance, alerts, notifications              |
 | `npm run smoke:reconcile` | Plant real rows, prove abandoned trips close and live ones don't |
@@ -873,7 +873,7 @@ deliberately import nothing from the database, the network or the DOM, which is
 what makes them testable at all — and is why they use relative sibling imports
 rather than `@/lib/...`, because Vitest has no path-alias configuration here.
 
-**Smoke suites** (`npm run smoke:all`, 308 checks over thirteen suites) run against a
+**Smoke suites** (`npm run smoke:all`, 309 checks over thirteen suites) run against a
 real server and a real database, because the bugs that matter most here are
 authorization bugs, and those only appear when a real session meets a real row:
 
